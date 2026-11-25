@@ -56,10 +56,64 @@ function roof(gb: GeoBuilder, halfW: number, halfD: number, h: number, color: nu
   roofAt(gb, 0, 0, halfW, halfD, h, color, y);
 }
 
-function windowBox(gb: GeoBuilder, x: number, y: number, z: number, w = 0.1, h = 0.1, lit = true) {
-  gb.add(cube(), C.glass, [x, y, z], [0, 0, 0], [w, h, 0.03]);
-  gb.add(cube(), C.stoneLight, [x, y - h * 0.62, z], [0, 0, 0], [w * 1.35, 0.02, 0.05]);
-  if (lit) gb.light(x, y, z + 0.04, 0.8);
+/**
+ * A window that reads as a window: stone surround proud of the wall, dark glass
+ * behind it, muntins crossing the panes and a sill underneath.
+ */
+function windowBox(gb: GeoBuilder, x: number, y: number, z: number, w = 0.1, h = 0.12, lit = true) {
+  const frame = 0.016;
+  gb.add(cube(), C.glass, [x, y, z], [0, 0, 0], [w, h, 0.018]);
+  // Surround: four bars, so the glass stays visible.
+  gb.add(cube(), C.stoneLight, [x, y + h / 2 + frame / 2, z + 0.006], [0, 0, 0], [w + frame * 2, frame, 0.03]);
+  gb.add(cube(), C.stoneLight, [x, y - h / 2 - frame / 2, z + 0.006], [0, 0, 0], [w + frame * 2, frame, 0.03]);
+  for (const side of [-1, 1]) {
+    gb.add(cube(), C.stoneLight, [x + side * (w / 2 + frame / 2), y, z + 0.006], [0, 0, 0], [frame, h, 0.03]);
+  }
+  // Muntins: a cross, thinner than the frame.
+  gb.add(cube(), C.stoneLight, [x, y, z + 0.014], [0, 0, 0], [0.006, h, 0.008]);
+  gb.add(cube(), C.stoneLight, [x, y, z + 0.014], [0, 0, 0], [w, 0.006, 0.008]);
+  // Sill, a touch wider than the surround.
+  gb.add(cube(), C.stone, [x, y - h / 2 - frame - 0.006, z + 0.012], [0, 0, 0], [w + frame * 3.2, 0.016, 0.05]);
+  if (lit) gb.light(x, y, z + 0.05, 0.8);
+}
+
+/**
+ * A door with its jambs, a lintel, two panels and a handle, plus the stone step.
+ * `z` is the face of the wall.
+ */
+function doorBox(gb: GeoBuilder, x: number, y: number, z: number, w = 0.13, h = 0.26) {
+  const jamb = 0.018;
+  gb.add(cube(), C.stoneLight, [x, y + h / 2 + jamb / 2, z + 0.004], [0, 0, 0], [w + jamb * 2.4, jamb, 0.026]);
+  for (const side of [-1, 1]) {
+    gb.add(cube(), C.stoneLight, [x + side * (w / 2 + jamb / 2), y, z + 0.004], [0, 0, 0], [jamb, h, 0.026]);
+  }
+  gb.add(cube(), C.door, [x, y, z + 0.012], [0, 0, 0], [w, h, 0.024]);
+  // Two panels and the seam of the door.
+  for (const side of [-1, 1]) {
+    gb.add(cube(), C.woodDark, [x + side * w * 0.22, y + h * 0.12, z + 0.026], [0, 0, 0], [w * 0.32, h * 0.4, 0.006]);
+    gb.add(cube(), C.woodDark, [x + side * w * 0.22, y - h * 0.24, z + 0.026], [0, 0, 0], [w * 0.32, h * 0.26, 0.006]);
+  }
+  gb.add(cube(), C.ink, [x, y, z + 0.026], [0, 0, 0], [0.004, h, 0.006]);
+  gb.add(cube(), C.iron, [x + w * 0.32, y - 0.005, z + 0.03], [0, 0, 0], [0.012, 0.012, 0.01]);
+  gb.add(cube(), C.stone, [x, y - h / 2 - 0.02, z + 0.04], [0, 0, 0], [w + 0.07, 0.03, 0.07]);
+}
+
+
+/** A slim iron finial, with a little cloth pennant if it is a flagpole. */
+function finial(gb: GeoBuilder, x: number, y: number, z: number, h = 0.14, cloth?: number) {
+  gb.add(post(), C.iron, [x, y + h / 2, z], [0, 0, 0], [0.013, h, 0.013]);
+  gb.add(blob(), C.iron, [x, y + h + 0.004, z], [0, 0, 0], [0.03, 0.03, 0.03]);
+  if (cloth === undefined) return;
+  gb.add(cube(), C.iron, [x + 0.012, y + h - 0.006, z], [0, 0, 0], [0.028, 0.006, 0.006]);
+  gb.add(cube(), cloth, [x + 0.032, y + h - 0.042, z], [0, 0, 0], [0.036, 0.075, 0.005]);
+  gb.add(cube(), cloth, [x + 0.05, y + h - 0.012, z], [0, 0, 0], [0.012, 0.012, 0.005]);
+}
+
+/** The small iron cross on a chapel roof: fine lines, not a black plank. */
+function chapelCross(gb: GeoBuilder, x: number, y: number, z: number) {
+  gb.add(post(), C.iron, [x, y + 0.05, z], [0, 0, 0], [0.012, 0.11, 0.012]);
+  gb.add(cube(), C.iron, [x, y + 0.075, z], [0, 0, 0], [0.055, 0.01, 0.01]);
+  gb.add(blob(), C.iron, [x, y + 0.006, z], [0, 0, 0], [0.024, 0.024, 0.024]);
 }
 
 function lamp(gb: GeoBuilder, x: number, z: number) {
@@ -167,7 +221,12 @@ interface HouseOptions {
   windows?: boolean;
   chimney?: boolean;
   jetty?: boolean;
+  /** Dark beams on the corners: the half-timbered look. */
+  timber?: boolean;
 }
+
+/** The wall washes a house can get, so a street never looks like one building. */
+const WALL_TINTS = [C.wall, C.wallWarm, C.wallCool, 0xf1e6cf, 0xf3ddd2, 0xe7ece1, 0xf4e4c8];
 
 /**
  * A body of `floors` storeys with a roof on top. The upper floors lean out a
@@ -182,7 +241,7 @@ function houseBlock(
   rnd: () => number,
   options: HouseOptions = {},
 ): number {
-  const wall = options.wall ?? C.wall;
+  const wall = options.wall ?? WALL_TINTS[Math.floor(rnd() * WALL_TINTS.length)];
   const roofColor = options.roof ?? C.roof;
   for (let i = 0; i < floors; i++) {
     const lean = options.jetty && i > 0 ? 1.05 + i * 0.03 : 1;
@@ -196,16 +255,25 @@ function houseBlock(
     }
   }
   const top = floors * FLOOR;
+  // Half-timbering: corner posts and the bands between floors, only on the faces
+  // that are not carrying the door.
+  if (options.timber) {
+    for (const sx of [-1, 1]) {
+      gb.add(cube(), C.woodDark, [sx * width * 0.5, top / 2, depth / 2 + 0.005], [0, 0, 0], [0.024, top, 0.02]);
+      gb.add(cube(), C.woodDark, [sx * width * 0.5, top / 2, -depth / 2 - 0.005], [0, 0, 0], [0.024, top, 0.02]);
+    }
+    for (let i = 1; i <= floors; i++) {
+      gb.add(cube(), C.woodDark, [0, i * FLOOR - 0.008, depth / 2 + 0.005], [0, 0, 0], [width, 0.022, 0.02]);
+      gb.add(cube(), C.woodDark, [0, i * FLOOR - 0.008, -depth / 2 - 0.005], [0, 0, 0], [width, 0.022, 0.02]);
+    }
+  }
   // Plinth: every house sits on a stone base instead of floating on the grass.
   gb.add(cube(), C.stoneDark, [0, 0.014, 0], [0, 0, 0], [width * 1.06, 0.028, depth * 1.06]);
   roof(gb, width * 0.62, depth * 0.62, 0.16 + 0.06 * floors, roofColor, top);
   if (options.chimney !== false) chimney(gb, width * 0.28, top + 0.12, -depth * 0.22);
   if (options.door !== false) {
     // Door with its frame, a step, and a lamp beside it.
-    gb.add(cube(), C.stoneLight, [0.02, 0.15, depth / 2 + 0.008], [0, 0, 0], [0.165, 0.3, 0.018]);
-    gb.add(cube(), C.door, [0.02, 0.14, depth / 2 + 0.022], [0, 0, 0], [0.12, 0.25, 0.028]);
-    gb.add(cube(), C.iron, [0.06, 0.13, depth / 2 + 0.04], [0, 0, 0], [0.014, 0.014, 0.012]);
-    gb.add(cube(), C.stoneLight, [0.02, 0.02, depth / 2 + 0.05], [0, 0, 0], [0.2, 0.04, 0.08]);
+    doorBox(gb, 0.02, 0.145, depth / 2, 0.13, 0.24);
     gb.add(cube(), C.iron, [width * 0.24, 0.2, depth / 2 + 0.02], [0, 0, 0], [0.012, 0.012, 0.05]);
     gb.add(cube(), C.lamp, [width * 0.24, 0.18, depth / 2 + 0.05], [0, 0, 0], [0.04, 0.05, 0.04]);
     gb.light(width * 0.24, 0.18, depth / 2 + 0.06, 0.7);
@@ -253,13 +321,13 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     const floors = Math.min(level, 3);
     houseBlock(gb, 0.6, 0.56, floors, rnd, {
       roof: rnd() < 0.35 ? C.roofDeep : C.roof,
-      wall: rnd() < 0.5 ? C.wall : C.wallWarm,
+      timber: rnd() < 0.45,
     });
     if (rnd() < 0.5) gb.add(blob(), C.leafDeep, [0.24, 0.06, 0.3], [0, rnd() * 3, 0], [0.14, 0.12, 0.14]);
   },
 
   townhouse: (gb, rnd) => {
-    houseBlock(gb, 0.62, 0.56, 2, rnd, { jetty: true, roof: rnd() < 0.5 ? C.roof : C.slate });
+    houseBlock(gb, 0.62, 0.56, 2, rnd, { jetty: true, timber: true, roof: rnd() < 0.5 ? C.roof : C.slate });
     // A balcony over the street.
     gb.add(cube(), C.wood, [0, FLOOR + 0.03, 0.31], [0, 0, 0], [0.5, 0.03, 0.14]);
     gb.add(cube(), C.woodDark, [0, FLOOR + 0.1, 0.37], [0, 0, 0], [0.5, 0.12, 0.02]);
@@ -267,7 +335,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
   },
 
   manor: (gb, rnd) => {
-    houseBlock(gb, 0.66, 0.58, 3, rnd, { jetty: true, roof: C.slate, wall: C.wallCool });
+    houseBlock(gb, 0.66, 0.58, 3, rnd, { jetty: true, timber: true, roof: C.slate, wall: C.wallCool });
     // Dormers in the roof and a flag over the door.
     for (const sx of [-1, 1]) {
       gb.add(cube(), C.wall, [sx * 0.17, 3 * FLOOR + 0.08, 0.14], [0, 0, 0], [0.14, 0.14, 0.12]);
@@ -275,8 +343,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
       gb.add(cube(), C.glass, [sx * 0.17, 3 * FLOOR + 0.09, 0.21], [0, 0, 0], [0.07, 0.07, 0.02]);
       gb.light(sx * 0.17, 3 * FLOOR + 0.09, 0.23, 0.6);
     }
-    gb.add(cube(), C.ink, [0.02, 0.3, 0.33], [0, 0, 0], [0.015, 0.5, 0.015]);
-    gb.add(panel(), C.roof, [0.09, 0.5, 0.33], [0, 0, 0], [0.14, 0.09, 1]);
+    finial(gb, 0.02, 0.3, 0.33, 0.2, C.roof);
     // Stone gateposts.
     for (const sx of [-1, 1]) gb.add(plate(), C.stone, [sx * 0.24, 0.06, 0.33], [0, 0, 0], [0.08, 0.12, 0.08]);
   },
@@ -288,9 +355,8 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     gb.add(cube(), C.stoneDark, [-0.28, 0.86, 0], [0, 0, 0], [0.27, 0.05, 0.27]);
     roof(gb, 0.19, 0.19, 0.3, C.slateDeep, 0.9);
     windowBox(gb, -0.28, 0.66, 0.13, 0.07, 0.13);
-    gb.add(cube(), C.door, [-0.28, 0.12, 0.13], [0, 0, 0], [0.1, 0.22, 0.03]);
-    gb.add(cube(), C.ink, [-0.28, 1.24, 0], [0, 0, 0], [0.018, 0.1, 0.018]);
-    gb.add(cube(), C.ink, [-0.28, 1.26, 0], [0, 0, 0], [0.1, 0.018, 0.018]);
+    doorBox(gb, -0.28, 0.12, 0.13, 0.11, 0.22);
+    chapelCross(gb, -0.28, 1.22, 0);
     gb.add(plate(), C.glass, [0.2, 0.42, 0.32], [1.57, 0, 0], [0.14, 0.03, 0.14]);
     gb.light(0.2, 0.42, 0.34, 0.9);
   },
@@ -374,7 +440,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     gb.add(cube(), C.lamp, [0, top + 0.11, 0], [0, 0, 0], [0.11, 0.11, 0.11]);
     gb.light(0, top + 0.11, 0, 2.2);
     gb.add(cone(), C.slateDeep, [0, top + 0.17, 0], [0, 0, 0], [0.32, 0.16, 0.32]);
-    gb.add(cube(), C.ink, [0, top + 0.35, 0], [0, 0, 0], [0.02, 0.06, 0.02]);
+    finial(gb, 0, top + 0.3, 0, 0.07);
     // A keeper's door at the foot.
     gb.add(cube(), C.door, [0, 0.12, 0.2], [0, 0, 0], [0.1, 0.2, 0.03]);
     windowBox(gb, 0, 0.55, 0.2, 0.06, 0.08, rnd() < 0.5);
@@ -396,8 +462,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
       gb.add(cone(), C.slateDeep, [sx * 0.3, wallH + 0.14, sz * 0.3], [0, 0, 0], [0.3, 0.26 + level * 0.04, 0.3]);
     }
     roof(gb, 0.2, 0.2, 0.26 + level * 0.05, C.slate, wallH + 0.04);
-    gb.add(cube(), C.ink, [0, wallH + 0.5, 0], [0, 0, 0], [0.015, 0.22, 0.015]);
-    gb.add(panel(), C.roof, [0.08, wallH + 0.56, 0], [0, 0, 0], [0.15, 0.09, 1]);
+    finial(gb, 0, wallH + 0.3, 0, 0.22, C.roof);
     gb.add(cube(), C.door, [0, 0.16, 0.275], [0, 0, 0], [0.14, 0.24, 0.03]);
     windowBox(gb, 0, wallH * 0.65, 0.275, 0.06, 0.1);
   },
@@ -409,7 +474,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     gb.add(cube(), C.stoneDark, [0, h + 0.02, 0], [0, 0, 0], [0.46, 0.06, 0.46]);
     gb.add(cube(), C.stone, [0, h + 0.1, 0], [0, 0, 0], [0.42, 0.1, 0.42]);
     roof(gb, 0.3, 0.3, 0.28, C.slate, h + 0.15);
-    gb.add(cube(), C.ink, [0, h + 0.46, 0], [0, 0, 0], [0.02, 0.1, 0.02]);
+    finial(gb, 0, h + 0.4, 0, 0.12);
     for (const sz of [1, -1]) {
       gb.add(plate(), C.cloth, [0, h - 0.2, sz * 0.2], [1.57, 0, 0], [0.24, 0.03, 0.24]);
       gb.add(cube(), C.ink, [0, h - 0.2, sz * 0.22], [0, 0, 0], [0.015, 0.09, 0.01]);
@@ -426,8 +491,9 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     gb.add(plate(), rnd() < 0.5 ? C.stone : C.wallCool, [0, 0.1 + h / 2, 0], [0, 0, 0], [0.36, h, 0.36]);
     gb.add(plate(), C.stoneDark, [0, h + 0.1, 0], [0, 0, 0], [0.42, 0.05, 0.42]);
     gb.add(cone(), rnd() < 0.5 ? C.slate : C.roofDeep, [0, h + 0.12, 0], [0, 0, 0], [0.46, 0.3, 0.46]);
-    gb.add(cube(), C.ink, [0, h + 0.43, 0], [0, 0, 0], [0.018, 0.09, 0.018]);
-    gb.add(cube(), C.ink, [0, h * 0.7, 0.18], [0, 0, 0], [0.05, 0.14, 0.02]);
+    finial(gb, 0, h + 0.38, 0, 0.09, C.cloth);
+    // A banner hanging down the wall.
+    gb.add(cube(), C.cloth, [0, h * 0.72, 0.19], [0, 0, 0], [0.07, 0.16, 0.008]);
     if (level > 1) windowBox(gb, 0, h * 0.45, 0.18, 0.06, 0.1);
   },
 
@@ -444,8 +510,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     gb.add(cube(), C.ink, [0, h - 0.02, 0], [0, 0, 0], [0.03, 0.08, 0.03]);
     gb.add(cube(), C.stone, [0, h + 0.03, 0], [0, 0, 0], [0.42, 0.07, 0.42]);
     roof(gb, 0.28, 0.28, 0.36, C.slate, h + 0.07);
-    gb.add(cube(), C.ink, [0, h + 0.45, 0], [0, 0, 0], [0.02, 0.12, 0.02]);
-    gb.add(cube(), C.ink, [0, h + 0.48, 0], [0, 0, 0], [0.1, 0.02, 0.02]);
+    finial(gb, 0, h + 0.39, 0, 0.12, C.cloth);
     gb.add(cube(), C.door, [0, 0.14, 0.18], [0, 0, 0], [0.11, 0.24, 0.03]);
     windowBox(gb, 0, h * 0.55, 0.18, 0.07, 0.12);
     void rnd;
@@ -467,9 +532,8 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
       gb.add(cube(), C.woodDark, [Math.cos(angle) * 0.25, h * 0.78, Math.sin(angle) * 0.25], [0, -angle, 0], [0.03, 0.12, 0.03]);
     }
     roof(gb, 0.3, 0.3, 0.34, C.slateDeep, h + 0.24);
-    gb.add(cube(), C.ink, [0, h + 0.62, 0], [0, 0, 0], [0.02, 0.2, 0.02]);
-    gb.add(panel(), C.roof, [0.1, h + 0.7, 0], [0, 0, 0], [0.16, 0.1, 1]);
-    gb.add(cube(), C.ink, [0, h * 0.55, 0.2], [0, 0, 0], [0.06, 0.16, 0.02]);
+    finial(gb, 0, h + 0.42, 0, 0.26, C.roofDeep);
+    gb.add(cube(), C.cloth, [0, h * 0.58, 0.21], [0, 0, 0], [0.08, 0.18, 0.008]);
     windowBox(gb, 0, h * 0.85, 0.2, 0.07, 0.1);
   },
 
@@ -479,11 +543,14 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     gb.add(plate(), C.wall, [0, 0.19 + h / 2, 0], [0, 0, 0], [0.42, h, 0.42]);
     gb.add(plate(), C.stone, [0, h + 0.16, 0], [0, 0, 0], [0.48, 0.05, 0.48]);
     gb.add(dome(), C.stoneLight, [0, h + 0.18, 0], [0, 0, 0], [0.4, 0.36, 0.4]);
-    gb.add(cube(), C.ink, [0, h + 0.3, 0.06], [0, 0, 0], [0.06, 0.14, 0.24]);
-    gb.add(post(), C.slateDeep, [0.02, h + 0.36, 0.12], [0.9, 0, 0.2], [0.05, 0.3, 0.05]);
+    // The shutter stands open and the telescope looks out of it.
+    gb.add(cube(), C.stoneDark, [0, h + 0.3, 0.04], [0, 0, 0], [0.11, 0.13, 0.16]);
+    gb.add(plate(), C.stone, [0, h + 0.37, 0], [0, 0, 0], [0.09, 0.03, 0.09]);
+    gb.add(post(), C.iron, [0.015, h + 0.4, 0.09], [0.85, 0, 0.15], [0.045, 0.26, 0.045]);
+    gb.add(plate(), C.iron, [0.045, h + 0.5, 0.18], [1.15, 0, 0], [0.055, 0.025, 0.055]);
+    gb.add(plate(), C.glass, [0.047, h + 0.515, 0.19], [1.15, 0, 0], [0.04, 0.012, 0.04]);
     gb.add(cube(), C.door, [0, 0.12, 0.22], [0, 0, 0], [0.12, 0.22, 0.03]);
     windowBox(gb, 0, 0.34, 0.22, 0.08, 0.09);
-    gb.add(cube(), C.ink, [0.06, h + 0.44, 0], [0, 0, 0], [0.015, 0.1, 0.015]);
     void rnd;
   },
 
@@ -493,7 +560,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     gb.add(plate(), C.stone, [0, 0.12 + h / 2, 0], [0, 0, 0], [0.38, h, 0.38]);
     gb.add(plate(), C.stoneLight, [0, h + 0.12, 0], [0, 0, 0], [0.44, 0.05, 0.44]);
     gb.add(cone(), C.slateDeep, [0, h + 0.14, 0], [0, 0, 0], [0.52, 0.28, 0.52]);
-    gb.add(cube(), C.ink, [0, h + 0.44, 0], [0, 0, 0], [0.02, 0.1, 0.02]);
+    finial(gb, 0, h + 0.38, 0, 0.1);
     for (let i = 0; i < 6; i++) {
       const angle = (i * Math.PI) / 3;
       gb.add(cube(), C.ink, [Math.cos(angle) * 0.18, h * 0.72, Math.sin(angle) * 0.18], [0, -angle, 0], [0.05, 0.05, 0.02]);
@@ -860,9 +927,8 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     gb.add(cube(), C.iron, [0.24, 0.3, depth / 2 + 0.05], [0, 0, 0], [0.012, 0.14, 0.012]);
     gb.add(cube(), C.roofDeep, [0.24, 0.24, depth / 2 + 0.07], [0, 0, 0], [0.1, 0.09, 0.014]);
     gb.light(-0.13, 0.16, depth / 2 + 0.05, 1);
-    // Two chimney stacks and a cat on the warm roof.
+    // Two chimney stacks on the warm roof.
     for (const x of [-0.18, 0.2]) chimney(gb, x, top + 0.06, -0.16);
-    gb.add(blob(), C.ink, [0.1, top + 0.2, 0.06], [0, 0.6, 0], [0.07, 0.09, 0.05]);
   },
 
   palace: (gb, rnd, level) => {
@@ -919,7 +985,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     for (let i = 1; i <= floors + 1; i++) {
       gb.add(cube(), C.stone, [0, base + i * FLOOR - 0.014, 0.2], [0, 0, 0], [0.34, 0.024, 0.22]);
     }
-    gb.add(cube(), C.door, [0, base + 0.15, 0.295], [0, 0, 0], [0.14, 0.28, 0.03]);
+    doorBox(gb, 0, base + 0.15, 0.29, 0.16, 0.28);
     for (const x of [-0.1, 0.1]) {
       gb.add(post(), C.stoneLight, [x, base + 0.14, 0.31], [0, 0, 0], [0.045, 0.28, 0.045]);
     }
@@ -971,8 +1037,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
       gb.add(cube(), C.ink, [Math.cos(angle) * 0.16, h + 0.02, Math.sin(angle) * 0.16], [0, -angle, 0], [0.06, 0.12, 0.02]);
     }
     gb.add(cone(), C.slateDeep, [0, h + 0.13, 0], [0, 0, 0], [0.36, 0.62, 0.36]);
-    gb.add(cube(), C.ink, [0, h + 0.78, 0], [0, 0, 0], [0.02, 0.14, 0.02]);
-    gb.add(cube(), C.ink, [0, h + 0.82, 0], [0, 0, 0], [0.12, 0.02, 0.02]);
+    finial(gb, 0, h + 0.68, 0, 0.14, C.cloth);
     gb.add(cube(), C.door, [0, 0.14, 0.18], [0, 0, 0], [0.11, 0.24, 0.03]);
     windowBox(gb, 0, h * 0.6, 0.18, 0.06, 0.12);
     void rnd;
@@ -993,7 +1058,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     // Beacon fire at the top.
     gb.add(blob(), C.roof, [0, h + 0.78, 0], [0, 0, 0], [0.14, 0.16, 0.14]);
     gb.light(0, h + 0.78, 0, 2.6);
-    gb.add(cube(), C.ink, [0, h * 0.6, 0.23], [0, 0, 0], [0.07, 0.16, 0.02]);
+    gb.add(cube(), C.cloth, [0, h * 0.62, 0.235], [0, 0, 0], [0.08, 0.18, 0.008]);
     windowBox(gb, 0, h * 0.35, 0.22, 0.07, 0.12);
     gb.add(cube(), C.door, [0, 0.15, 0.23], [0, 0, 0], [0.12, 0.26, 0.03]);
     void rnd;

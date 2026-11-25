@@ -112,10 +112,10 @@ export function inkMaterial({
         float ground = smoothstep(0.0, 0.5, vWorld.y);
         col *= mix(0.84, 1.0, ground);
 
-        // A thin ink rim at grazing angles keeps silhouettes solid.
+        // A whisper of ink at grazing angles, just enough to keep silhouettes.
         vec3 toEye = normalize(cameraPosition - vWorld);
-        float fresnel = pow(1.0 - abs(dot(n, toEye)), 2.6);
-        col = mix(col, uInk, fresnel * (0.10 + uDusk * 0.07));
+        float fresnel = pow(1.0 - abs(dot(n, toEye)), 3.2);
+        col = mix(col, uInk, fresnel * (0.04 + uDusk * 0.05));
 
         // Evening: the paper cools and the ink gets heavier.
         col = mix(col, col * vec3(0.58, 0.66, 0.96), uDusk * 0.85);

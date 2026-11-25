@@ -8,8 +8,8 @@ import * as THREE from 'three';
 import { key, rng, worldX, worldZ } from './grid';
 import { Light } from './geo';
 import { Resolved } from './rules';
-import { GeoBuilder, blob, cone, cube, plate, post } from './geo';
-import { ringTexture, smokeMaterial } from './materials';
+import { GeoBuilder, ball, blob, cone, cube, plate, post } from './geo';
+import { ringTexture, shadowMaterial, smokeMaterial } from './materials';
 
 type Tile = { x: number; z: number };
 
@@ -93,9 +93,14 @@ interface Gull {
   phase: number;
 }
 
-const COATS = [0xc4633f, 0x5b7fa6, 0x7a8f5a, 0xb5874a, 0x8a6fa0, 0x3f6f6a];
-const SKIN = 0xe7c6a5;
-const HATS = [0x3a2f2a, 0x7a5a44, 0xa9503a, 0x8b90a3];
+const COATS = [0xd9714a, 0x4f7fb5, 0x83a758, 0xc9944b, 0x9a76b8, 0x4a8b83, 0xe6d8bd, 0xb85a52, 0x6f7fa8];
+const SKIN = 0xf1d5b6;
+const SKIN_SHADE = 0xdcb894;
+const HAIR = [0x3a2f2a, 0x5a3d2b, 0x8a6248, 0xc8a26a, 0x6b6560];
+/** Hat and trim colours a villager may wear. */
+const HAT_COLORS = [0x3a2f2a, 0x8a6248, 0xc4633f, 0x4f7fb5, 0x6b6560, 0x83a758];
+const CLOTH = 0xf2e8d4;
+const APRON = 0xe8dcc4;
 
 /** Roles with a chimney: where smoke comes from. */
 const CHIMNEYS: ReadonlySet<string> = new Set([
@@ -103,6 +108,8 @@ const CHIMNEYS: ReadonlySet<string> = new Set([
 ]);
 
 const PLAZAS: ReadonlySet<string> = new Set(['plaza', 'square', 'bandstand', 'theatre']);
+/** Open paving where a crowd can stand: the bandstand and the theatre are buildings. */
+const OPEN_PLAZAS: ReadonlySet<string> = new Set(['plaza', 'square']);
 
 export class Life {
   readonly group = new THREE.Group();
@@ -117,6 +124,16 @@ export class Life {
   private readonly gulls: Gull[] = [];
   private readonly smoke = smokeMaterial();
   private readonly rings = ringTexture();
+  private readonly figureShadowMaterial = (() => {
+    const material = shadowMaterial();
+    material.uniforms.uAlpha.value = 0.12;
+    return material;
+  })();
+  private readonly figureShadowGeometry = (() => {
+    const geometry = new THREE.PlaneGeometry(1, 1);
+    geometry.rotateX(-Math.PI / 2);
+    return geometry;
+  })();
   private glowPoints: THREE.Points | null = null;
   private smokePoints: THREE.Points | null = null;
   private dusk = 0;
@@ -133,19 +150,34 @@ export class Life {
     const random = rng((seed ^ 0x2545f491) >>> 0);
 
     const roads = new Map<string, Resolved>();
+    const squares: Resolved[] = [];
+    const openSquares: Resolved[] = [];
     for (const [k, cell] of resolved) {
       if (cell.role === 'street' || cell.role === 'quay') roads.set(k, cell);
+      if (PLAZAS.has(cell.role)) squares.push(cell);
+      if (OPEN_PLAZAS.has(cell.role)) openSquares.push(cell);
     }
-    const roadKeys = new Set(roads.keys());
+    // People cross the squares too, so the streets lead somewhere.
+    const roadKeys = new Set([...roads.keys(), ...[...resolved.entries()].filter(([, c]) => PLAZAS.has(c.role)).map(([k]) => k)]);
 
-    // People walking, one every couple of street tiles.
-    const starts = [...roads.values()];
-    const walkers = Math.min(16, Math.floor(roads.size / 2));
-    for (let i = 0; i < walkers; i++) {
+    // People walking: about one per street tile, with a soft cap for phones.
+    const doorsteps: Resolved[] = [];
+    for (const cell of resolved.values()) {
+      if (cell.role !== 'house' && cell.role !== 'townhouse' && cell.role !== 'cottage') continue;
+      if (['1,0', '-1,0', '0,1', '0,-1'].some((d) => {
+        const [dx, dz] = d.split(',').map(Number);
+        return roadKeys.has(`${cell.x + dx},${cell.z + dz}`);
+      })) {
+        doorsteps.push(cell);
+      }
+    }
+    const starts = [...roads.values(), ...doorsteps, ...squares];
+    const walkers = Math.min(26, Math.max(0, Math.floor((roads.size + squares.length) / 0.95)));
+    for (let i = 0; i < walkers && starts.length > 0; i++) {
       const start = starts[Math.floor(random() * starts.length)];
       const path = this.walk(start, roadKeys, random);
       if (path.length < 2) continue;
-      const figure = this.figure(random, random() < 0.18 ? 0.72 : 1);
+      const figure = this.figure(random, random() < 0.16 ? 0.24 : 0.295 + random() * 0.03);
       if (!figure) continue;
       const tile = path[0];
       figure.group.position.set(worldX(tile.x), 0, worldZ(tile.z));
@@ -163,16 +195,16 @@ export class Life {
       });
     }
 
-    // People standing about the square.
-    const plazas = [...resolved.values()].filter((cell) => PLAZAS.has(cell.role));
-    const idlers = Math.min(10, Math.floor(plazas.length / 2));
-    for (let i = 0; i < idlers; i++) {
+    // People standing about the square, never inside the bandstand.
+    const plazas = openSquares.length > 0 ? openSquares : [...roads.values()];
+    const idlers = Math.min(22, Math.ceil(plazas.length * 1.8));
+    for (let i = 0; i < idlers && plazas.length > 0; i++) {
       const spot = plazas[Math.floor(random() * plazas.length)];
-      const figure = this.figure(random, random() < 0.25 ? 0.7 : 1);
+      const figure = this.figure(random, random() < 0.22 ? 0.235 : 0.29 + random() * 0.03);
       if (!figure) continue;
-      const ox = (random() - 0.5) * 0.5;
-      const oz = (random() - 0.5) * 0.5;
-      figure.group.position.set(worldX(spot.x) + ox, 0, worldZ(spot.z) + oz);
+      const around = random() * Math.PI * 2;
+      const reach = 0.4 + random() * 0.1;
+      figure.group.position.set(worldX(spot.x) + Math.cos(around) * reach, 0, worldZ(spot.z) + Math.sin(around) * reach);
       figure.group.rotation.y = random() * Math.PI * 2;
       this.group.add(figure.group);
       this.idlers.push({
@@ -530,56 +562,139 @@ export class Life {
     return path;
   }
 
-  /** A little person with legs and arms on their own pivots, so they can walk. */
+  /**
+   * A villager, modelled about one unit tall and then scaled down to the size of
+   * the town: feet, legs, a shaped coat, arms with hands, a neck, a head with a
+   * face and a hat. Legs and arms hang from pivots so the walk can swing them.
+   */
   private figure(random: () => number, scale: number): Omit<Walker, 'path' | 'index' | 't' | 'dir' | 'speed' | 'wait' | 'phase'> | null {
     const coat = COATS[Math.floor(random() * COATS.length)];
-    const hat = HATS[Math.floor(random() * HATS.length)];
+    const trim = HAT_COLORS[Math.floor(random() * HAT_COLORS.length)];
+    const skin = random() < 0.18 ? 0xc99a72 : SKIN;
+    const hair = HAIR[Math.floor(random() * HAIR.length)];
     const group = new THREE.Group();
 
-    const torso = new GeoBuilder();
-    torso.add(plate(), coat, [0, 0.055, 0], [0, 0, 0], [0.085, 0.11, 0.07]);
-    torso.add(blob(), SKIN, [0, 0.145, 0], [0, 0, 0], [0.066, 0.07, 0.066]);
-    torso.add(cube(), hat, [0, 0.178, 0], [0, 0, 0], [0.085, 0.016, 0.085]);
-    if (random() < 0.3) {
-      // A basket on the way to market.
-      torso.add(cube(), 0xb59068, [0.075, 0.105, 0.02], [0, 0, 0], [0.06, 0.05, 0.045]);
-      torso.add(blob(), 0xc4633f, [0.075, 0.135, 0.02], [0, 0, 0], [0.05, 0.03, 0.04]);
+    const body = new GeoBuilder();
+    // Trousers, a shaped coat and a flared hem.
+    body.add(cube(), 0x4a3f39, [0, 0.36, 0], [0, 0, 0], [0.2, 0.16, 0.15]);
+    body.add(cube(), coat, [0, 0.6, 0], [0, 0, 0], [0.27, 0.32, 0.19]);
+    body.add(cube(), coat, [0, 0.47, 0], [0, 0, 0], [0.31, 0.07, 0.21]);
+    body.add(cube(), trim, [0, 0.55, 0], [0, 0, 0], [0.285, 0.026, 0.2]);
+    // Collar, scarf or shirt front.
+    body.add(cube(), CLOTH, [0, 0.765, 0], [0, 0, 0], [0.18, 0.05, 0.16]);
+    const collar = random();
+    if (collar < 0.45) {
+      body.add(cube(), coat, [0, 0.75, 0.085], [0, 0, 0], [0.09, 0.2, 0.02]);
+      body.add(cube(), coat, [-0.03, 0.81, 0.09], [0, 0, 0.3], [0.05, 0.09, 0.018]);
+    } else if (collar < 0.7) {
+      body.add(cube(), trim, [0, 0.74, 0.083], [0, 0, 0], [0.11, 0.05, 0.02]);
     }
-    const torsoGeometry = torso.build();
-    if (!torsoGeometry) return null;
-    group.add(new THREE.Mesh(torsoGeometry, this.surface));
+    // Apron and satchel: village trades read at a glance.
+    const kit = random();
+    if (kit < 0.28) {
+      body.add(cube(), APRON, [0, 0.5, 0.1], [0, 0, 0], [0.19, 0.26, 0.012]);
+      body.add(cube(), APRON, [0, 0.64, 0.101], [0, 0, 0], [0.13, 0.06, 0.012]);
+    } else if (kit < 0.45) {
+      body.add(cube(), 0x8a6248, [0.16, 0.47, 0.02], [0, 0, 0], [0.075, 0.11, 0.12]);
+      body.add(cube(), 0x5a3d2b, [0.1, 0.63, -0.02], [0, 0, 0.7], [0.02, 0.2, 0.02]);
+    } else if (kit < 0.58) {
+      body.add(cube(), 0xb59068, [0.19, 0.5, 0.01], [0, 0, 0], [0.12, 0.1, 0.1]);
+      body.add(blob(), 0xc4633f, [0.19, 0.56, 0.01], [0, 0, 0], [0.1, 0.05, 0.085]);
+    }
+    // Neck and head, with a face on the forward side (+z).
+    body.add(post(), skin, [0, 0.775, 0], [0, 0, 0], [0.075, 0.05, 0.075]);
+    body.add(ball(), skin, [0, 0.855, 0.004], [0, 0, 0], [0.155, 0.17, 0.155]);
+    // Ears, nose and mouth: enough to read a face at the size of a door.
+    for (const side of [-1, 1]) {
+      body.add(blob(), SKIN_SHADE, [side * 0.075, 0.852, 0.01], [0, 0, 0], [0.035, 0.05, 0.035]);
+      body.add(cube(), 0x3a2f2a, [side * 0.033, 0.868, 0.074], [0, 0, 0], [0.02, 0.02, 0.012]);
+      body.add(cube(), 0x8a6248, [side * 0.033, 0.892, 0.073], [0, 0, 0], [0.026, 0.008, 0.012]);
+    }
+    body.add(cube(), SKIN_SHADE, [0, 0.845, 0.083], [0, 0, 0], [0.024, 0.03, 0.025]);
+    body.add(cube(), 0x8a5348, [0, 0.815, 0.073], [0, 0, 0], [0.028, 0.008, 0.012]);
+    // Hair: a cap over the crown and the back of the head.
+    body.add(ball(), hair, [0, 0.9, -0.026], [0, 0, 0], [0.165, 0.115, 0.16]);
+    if (random() < 0.3) {
+      // Long hair down the back.
+      body.add(cube(), hair, [0, 0.83, -0.075], [0, 0, 0], [0.11, 0.16, 0.05]);
+    }
+    const hat = random();
+    if (hat < 0.28) {
+      // Flat cap.
+      const felt = HAT_COLORS[Math.floor(random() * HAT_COLORS.length)];
+      body.add(cube(), felt, [0, 0.925, 0.025], [0.06, 0, 0], [0.185, 0.018, 0.115]);
+      body.add(ball(), felt, [0, 0.942, -0.012], [0, 0, 0], [0.17, 0.075, 0.16]);
+    } else if (hat < 0.52) {
+      // Wide-brimmed straw hat.
+      const straw = random() < 0.5 ? 0xd9bb7c : 0xc8a26a;
+      body.add(plate(), straw, [0, 0.928, 0.008], [0.08, 0, 0], [0.3, 0.3, 0.014]);
+      body.add(plate(), straw, [0, 0.952, 0], [0, 0, 0], [0.17, 0.17, 0.07]);
+      body.add(cube(), trim, [0, 0.935, 0], [0, 0, 0], [0.175, 0.014, 0.175]);
+    } else if (hat < 0.68) {
+      // A hood: a cowl behind the head with a rim over the brow, face free.
+      const cloth = random() < 0.5 ? trim : CLOTH;
+      body.add(ball(), cloth, [0, 0.85, -0.055], [0, 0, 0], [0.215, 0.235, 0.2]);
+      for (const side of [-1, 1]) {
+        body.add(cube(), cloth, [side * 0.082, 0.855, -0.005], [0, side * 0.2, 0], [0.035, 0.2, 0.16]);
+      }
+      body.add(cube(), cloth, [0, 0.928, 0.028], [0.18, 0, 0], [0.19, 0.045, 0.08]);
+      body.add(ball(), cloth, [0, 0.78, -0.04], [0, 0, 0], [0.23, 0.12, 0.19]);
+    } else if (hat < 0.84) {
+      // Top hat for the gentry.
+      body.add(cube(), 0x3a2f2a, [0, 0.936, 0], [0, 0, 0], [0.205, 0.018, 0.205]);
+      body.add(cube(), 0x3a2f2a, [0, 0.995, 0], [0, 0, 0], [0.15, 0.11, 0.15]);
+      body.add(cube(), trim, [0, 0.95, 0], [0, 0, 0], [0.155, 0.018, 0.155]);
+    }
+    // Collar pulled up for the cold, over the top of the coat.
+    if (collar > 0.72) {
+      body.add(ball(), CLOTH, [0, 0.77, -0.015], [0, 0, 0], [0.19, 0.09, 0.17]);
+    }
+    const bodyGeometry = body.build();
+    if (!bodyGeometry) return null;
+    group.add(new THREE.Mesh(bodyGeometry, this.surface));
 
+    // Legs with shoes, and arms with hands, on their own pivots.
     const legGeometry = new GeoBuilder()
-      .add(cube(), 0x4a3f39, [0, -0.045, 0], [0, 0, 0], [0.028, 0.09, 0.028])
+      .add(cube(), 0x4a3f39, [0, -0.235, 0], [0, 0, 0], [0.08, 0.47, 0.085])
+      .add(cube(), 0x3a2f2a, [0, -0.445, 0.03], [0, 0, 0], [0.095, 0.055, 0.16])
       .build();
     const armGeometry = new GeoBuilder()
-      .add(cube(), coat, [0, -0.04, 0], [0, 0, 0], [0.022, 0.08, 0.022])
+      .add(cube(), coat, [0, -0.115, 0], [0, 0, 0], [0.07, 0.25, 0.08])
+      .add(cube(), CLOTH, [0, -0.225, 0], [0, 0, 0], [0.06, 0.03, 0.07])
+      .add(ball(), skin, [0, -0.275, 0], [0, 0, 0], [0.07, 0.08, 0.07])
       .build();
     if (!legGeometry || !armGeometry) return null;
 
     const makeLeg = (x: number): THREE.Group => {
       const pivot = new THREE.Group();
-      pivot.position.set(x, 0.09, 0);
+      pivot.position.set(x, 0.47, 0);
       pivot.add(new THREE.Mesh(legGeometry, this.surface));
       group.add(pivot);
       return pivot;
     };
     const makeArm = (x: number): THREE.Group => {
       const pivot = new THREE.Group();
-      pivot.position.set(x, 0.165, 0);
+      pivot.position.set(x, 0.745, 0);
       pivot.add(new THREE.Mesh(armGeometry, this.surface));
       group.add(pivot);
       return pivot;
     };
 
-    const legL = makeLeg(-0.024);
-    const legR = makeLeg(0.024);
-    const armL = makeArm(-0.05);
-    const armR = makeArm(0.05);
+    const legL = makeLeg(-0.072);
+    const legR = makeLeg(0.072);
+    const armL = makeArm(-0.162);
+    const armR = makeArm(0.162);
 
     // The legs share one geometry, but each mesh needs its own: clone quietly.
     (legR.children[0] as THREE.Mesh).geometry = legGeometry.clone();
     (armR.children[0] as THREE.Mesh).geometry = armGeometry.clone();
+
+    // A soft ink shadow grounds them on the paving.
+    const shadow = new THREE.Mesh(this.figureShadowGeometry, this.figureShadowMaterial);
+    shadow.position.y = 0.045;
+    shadow.scale.set(0.62, 1, 0.5);
+    group.add(shadow);
+
     group.scale.setScalar(scale);
     return { group, legL, legR, armL, armR };
   }
@@ -675,12 +790,12 @@ export class Life {
     const group = new THREE.Group();
     const envelope = new THREE.Group();
     const gb = new GeoBuilder();
-    const panels = [0xc4633f, 0xf6edda, 0x6f9d8c, 0xf6edda];
-    for (let i = 0; i < 4; i++) {
-      const angle = (i * Math.PI) / 2;
-      gb.add(blob(), panels[i], [Math.cos(angle) * 0.12, 0, Math.sin(angle) * 0.12], [0, 0, 0], [0.32, 0.42, 0.3]);
-    }
-    gb.add(blob(), panels[0], [0, 0.2, 0], [0, 0, 0], [0.34, 0.3, 0.32]);
+    const cloth = random() < 0.5 ? 0xf6edda : 0xf2e2c6;
+    const band = [0xc4633f, 0x6f9d8c, 0x4f7fb5][Math.floor(random() * 3)];
+    gb.add(ball(), cloth, [0, 0, 0], [0, 0, 0], [0.42, 0.5, 0.42]);
+    gb.add(plate(), band, [0, -0.02, 0], [0, 0, 0], [0.432, 0.14, 0.432]);
+    gb.add(ball(), cloth, [0, 0.2, 0], [0, 0, 0], [0.3, 0.22, 0.3]);
+    gb.add(plate(), 0xb59068, [0, -0.24, 0], [0, 0, 0], [0.17, 0.05, 0.17]);
     // Ropes and basket.
     for (const [x, z] of [[-0.07, -0.07], [0.07, -0.07], [-0.07, 0.07], [0.07, 0.07]] as const) {
       gb.add(cube(), 0x3a2f2a, [x * 1.3, -0.42, z * 1.3], [0, 0, 0], [0.012, 0.34, 0.012]);
@@ -763,7 +878,7 @@ export class Life {
     left.position.x = 0.04;
     right.position.x = -0.04;
     group.add(left, right);
-    group.scale.setScalar(0.9 + random() * 0.4);
+    group.scale.setScalar(0.42 + random() * 0.12);
     return { group, wingL: left, wingR: right };
   }
 
@@ -793,5 +908,7 @@ export class Life {
     this.clear();
     this.smoke.dispose();
     this.rings.dispose();
+    this.figureShadowGeometry.dispose();
+    this.figureShadowMaterial.dispose();
   }
 }

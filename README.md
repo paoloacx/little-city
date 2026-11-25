@@ -133,8 +133,12 @@ un piso, y una muralla junta convierte un rincón en fortaleza: todo se intercon
 
 ## Lo que se mueve
 
-- La gente pasea por las calles con las piernas y los brazos articulados; en la plaza hay gente
-  parada, meciéndose, y algunos niños. Uno de cada tres lleva la cesta de la compra.
+- La gente pasea por las calles y cruza la plaza con las piernas y los brazos articulados, y sale
+  también de las casas que dan a la calle. En la plaza hay gente parada, meciéndose, y algunos niños.
+  Van a escala de puerta y con cuerpo entero: piernas, zapatos, abrigo con fajín, manos, cuello, cara
+  con ojos, nariz y boca, pelo y sombrero (gorra, pamela de paja, capucha, chistera o nada). Muchos
+  llevan delantal, zurrón o cesta. Cada uno proyecta una sombra suave en el suelo, y la gente parada
+  se coloca en el borde de la plaza para no meterse dentro del quiosco ni de la fuente.
 - **Perros** que trotan de acá para allá moviendo la cola, y un **globo aerostático** que da vueltas
   al pueblo, subiendo y bajando con la brisa.
 - **Gatos** que se cruzan por las calles, con la cola levantada y las patas moviéndose; **palomas**
@@ -168,10 +172,18 @@ un piso, y una muralla junta convierte un rincón en fortaleza: todo se intercon
 Notas de implementación que costaron encontrar:
 
 - El contorno es un *inverted hull*: la misma geometría en `BackSide`, empujada por la normal con un
-  ruido. Nada más fino que el grosor del contorno se vuelve una mancha negra, así que el empedrado se
-  construye con losas pequeñas en vez de líneas.
-- El sombreado son cinco manchas planas, sombra de contacto en la base y un filo de tinta al ras del
-  perfil. Antes había un rayado en pantalla; se quitó porque parecía tela y se comía el dibujo.
+  ruido. El trazo es fino (0,008 de mundo) a propósito: con un hull grueso las ventanas y las puertas
+  desaparecían bajo la tinta, y la hierba o los matojos salían como garabatos negros. Por eso los
+  matojos son montoncitos anchos y no briznas: lo que es más fino que la pluma se dibuja solo con
+  tinta. El empedrado se construye con losas pequeñas, no con líneas.
+- El sombreado son cinco manchas planas, sombra de contacto en la base y un filo de tinta muy suave
+  al ras del perfil. Antes había un rayado en pantalla; se quitó porque parecía tela y se comía el
+  dibujo.
+- Las ventanas llevan marco de piedra que sobresale del muro, cruceta y alféizar; las puertas, jambas,
+  dintel, dos cuarteles y picaporte. Las casas eligen entre siete cales de muro y muchas llevan
+  entramado de madera en las esquinas, para que una calle no parezca la misma casa repetida.
+- Los remates de los tejados son veletas de hierro finas, con banderín de tela cuando toca; antes eran
+  cruces de tinta que desde lejos parecían manchas. La cruz de la capilla también es de hierro y fina.
 - Todo el color va por vértice y `THREE.ColorManagement` está desactivado: los shaders escriben el
   color tal cual, sin conversiones, así que el papel es exactamente `#f2ede3` (y su noche, `#9ba0b8`).
 - El agua es un plato que se desvanece hacia el papel a partir del radio de la isla, para que el

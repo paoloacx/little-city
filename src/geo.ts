@@ -81,6 +81,8 @@ export const cube = (): THREE.BoxGeometry => new THREE.BoxGeometry(1, 1, 1);
 export const plate = (): THREE.CylinderGeometry => new THREE.CylinderGeometry(0.5, 0.5, 1, 10);
 export const post = (): THREE.CylinderGeometry => new THREE.CylinderGeometry(0.5, 0.5, 1, 6);
 export const blob = (): THREE.IcosahedronGeometry => new THREE.IcosahedronGeometry(0.5, 0);
+/** A rounder ball, for heads and hats that should not look faceted. */
+export const ball = (): THREE.SphereGeometry => new THREE.SphereGeometry(0.5, 12, 8);
 
 /** A square pyramid, rotated so its faces line up with the axes. */
 export function pyramid(): THREE.ConeGeometry {

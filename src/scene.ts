@@ -98,7 +98,7 @@ export class World {
   private readonly townGroup = new THREE.Group();
   private readonly ghost = new THREE.Group();
   private readonly surface = inkMaterial();
-  private readonly outline = inkOutlineMaterial(0.034);
+  private readonly outline = inkOutlineMaterial(0.008);
   private readonly shadowMaterial = shadowMaterial();
   private readonly water = waterMaterial();
   private readonly ghostMat = ghostMaterial();
@@ -238,8 +238,12 @@ export class World {
       wx + (random() - 0.5) * spread,
       wz + (random() - 0.5) * spread,
     ];
+    // Grass tufts are mounds, not needles: a blade thinner than the pen would
+    // come out as a black stroke.
     const tuft = (x: number, z: number, scale = 1): void => {
-      gb.add(cone(), b.grass[0], [x, 0.004, z], [0, random() * 3, 0], [0.09 * scale, 0.1 * scale, 0.09 * scale]);
+      const turn = random() * 3;
+      gb.add(cone(), b.grass[0], [x, 0.004, z], [0, turn, 0], [0.18 * scale, 0.11 * scale, 0.18 * scale]);
+      gb.add(cone(), b.grass[0], [x + 0.06 * scale, 0.004, z - 0.045 * scale], [0, turn + 1, 0], [0.11 * scale, 0.08 * scale, 0.11 * scale]);
     };
     const pebble = (x: number, z: number, scale = 1, color: number = b.pebble): void => {
       gb.add(blob(), color, [x, 0.03 * scale, z], [0, random() * 3, 0], [0.1 * scale, 0.07 * scale, 0.1 * scale]);
