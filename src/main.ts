@@ -738,3 +738,17 @@ setCycle(localStorage.getItem(CYCLE_KEY) !== 'off');
 /* `?hora=0.7` starts the clock at dusk: handy for looking at the lights. */
 const hour = Number(new URLSearchParams(location.search).get('hora'));
 if (Number.isFinite(hour) && hour >= 0) world.setPhase(hour);
+
+/* A small handle for poking at the diorama from the console: stats and timing. */
+if (import.meta.env.DEV) {
+  (window as unknown as { __ciudad: unknown }).__ciudad = {
+    world,
+    town,
+    stats: () => world.stats(),
+    rebuild: (times = 1): number => {
+      const started = performance.now();
+      for (let i = 0; i < times; i++) world.rebuild(town);
+      return (performance.now() - started) / times;
+    },
+  };
+}

@@ -851,21 +851,36 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
   },
 
   quay: (gb, rnd) => {
+    // A stone quay: small slabs, one shade apart, with dark mortar between.
     gb.add(cube(), C.stoneDark, [0, 0.02, 0], [0, 0, 0], [1.0, 0.04, 1.0]);
     const n = 3;
     const step = 1 / n;
+    const tones = [C.stone, C.stoneLight, 0xd2c7b4, C.stone];
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         const px = -0.5 + step * (i + 0.5);
         const pz = -0.5 + step * (j + 0.5);
-        const tone = rnd() < 0.35 ? C.stone : C.stoneLight;
-        gb.add(cube(), tone, [px, 0.05, pz], [0, 0, 0], [step * 0.88, 0.02, step * 0.88]);
+        gb.add(cube(), tones[Math.floor(rnd() * tones.length)], [px, 0.055, pz], [0, 0, 0], [step * 0.9, 0.025, step * 0.9]);
       }
     }
-    for (const [x, z] of [[0.4, 0.4], [-0.4, -0.4]] as const) {
-      gb.add(plate(), C.woodDark, [x, 0.14, z], [0, 0, 0], [0.1, 0.18, 0.1]);
+    // Kerb along two sides, with mooring rings and steps down to the water.
+    for (const sx of [-1, 1]) {
+      gb.add(cube(), C.stone, [sx * 0.45, 0.09, 0], [0, 0, 0], [0.1, 0.1, 0.96]);
+      gb.add(cube(), C.stoneLight, [sx * 0.45, 0.145, 0], [0, 0, 0], [0.12, 0.03, 0.98]);
     }
-    if (rnd() < 0.4) lamp(gb, 0.4, -0.4);
+    for (const z of [-0.3, 0, 0.3]) {
+      gb.add(ring(), C.iron, [-0.45, 0.1, z], [0, 1.57, 0], [0.11, 0.11, 0.11]);
+      gb.add(plate(), C.stoneDark, [0.45, 0.11, z], [0, 0, 0], [0.08, 0.06, 0.08]);
+    }
+    // Three steps down to the boats, and a lamp on the corner.
+    for (let i = 0; i < 3; i++) {
+      gb.add(cube(), C.stone, [0.09 - i * 0.05, 0.05 - i * 0.035, 0.49 + i * 0.004], [0, 0, 0], [0.16, 0.05, 0.1]);
+    }
+    // Barrel and coil of rope.
+    gb.add(plate(), C.wood, [0.2, 0.13, -0.28], [0, 0, 0], [0.15, 0.16, 0.15]);
+    gb.add(plate(), C.iron, [0.2, 0.21, -0.28], [0, 0, 0], [0.155, 0.02, 0.155]);
+    gb.add(ring(), 0xb8a68a, [-0.15, 0.08, -0.35], [1.57, 0.4, 0], [0.2, 0.2, 0.2]);
+    if (rnd() < 0.5) lamp(gb, -0.38, 0.38);
   },
 
   bridge: (gb, rnd) => {
@@ -981,14 +996,83 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
     gb.add(quad(), C.leafLight, [0, 0.005, 0], [0, 0, 0], [0.9, 1, 0.9]);
   },
 
-  dock: (gb) => {
-    for (let i = -2; i <= 2; i++) {
-      gb.add(cube(), C.wood, [i * 0.19, 0.06, 0], [0, 0, 0], [0.16, 0.035, 0.82]);
+  dock: (gb, rnd, level) => {
+    // A jetty that runs towards open water: stringers, joists, planks with
+    // gaps, pilings, a ladder, bollards and a lantern. Bigger levels add a
+    // T-head, crates and a crane.
+    const deckY = 0.075;
+    const long = 0.92;
+    const wide = 0.66;
+    // Two stringers carry the deck; the joists sit on top of them.
+    for (const sx of [-1, 1]) {
+      gb.add(cube(), C.woodDark, [sx * wide * 0.36, 0.028, 0], [0, 0, 0], [0.07, 0.055, long]);
     }
-    for (const [x, z] of [[-0.4, -0.34], [0.4, -0.34], [-0.4, 0.34], [0.4, 0.34]] as const) {
-      gb.add(post(), C.woodDark, [x, -0.12, z], [0, 0, 0], [0.07, 0.5, 0.07]);
+    for (let i = 0; i < 4; i++) {
+      gb.add(cube(), C.woodDark, [0, 0.05, -0.36 + i * 0.24], [0, 0, 0], [wide, 0.035, 0.045]);
     }
-    gb.add(cube(), C.woodDark, [0, 0.04, 0.4], [0, 0, 0], [0.86, 0.03, 0.06]);
+    // The planks, each a shade apart and with a gap between them.
+    const tones = [C.wood, 0xa98a63, 0x8f6f4f, C.wood];
+    for (let i = 0; i < 8; i++) {
+      const z = -0.4 + i * 0.115;
+      gb.add(cube(), tones[i % tones.length], [0, deckY, z], [0, 0, 0], [wide, 0.026, 0.098]);
+    }
+    // A darker gap under the planks, so the deck does not read as one slab.
+    gb.add(cube(), C.woodDark, [0, 0.058, 0], [0, 0, 0], [wide - 0.03, 0.01, long - 0.04]);
+    // Pilings down into the water, with rope wraps.
+    for (const [x, z] of [[-0.36, -0.4], [0.36, -0.4], [-0.36, 0.4], [0.36, 0.4]] as const) {
+      gb.add(post(), C.woodDark, [x, -0.2, z], [0, 0, 0], [0.085, 0.6, 0.085]);
+      gb.add(plate(), 0xb8a68a, [x, 0.02, z], [0, 0, 0], [0.1, 0.03, 0.1]);
+      gb.add(ring(), 0xb8a68a, [x, -0.12, z], [1.57, 0, 0], [0.1, 0.1, 0.1]);
+    }
+    // Edge rail on one side only: the other stays open for mooring.
+    for (const z of [-0.34, 0, 0.34]) {
+      gb.add(post(), C.woodDark, [0.3, 0.2, z], [0, 0, 0], [0.03, 0.26, 0.03]);
+    }
+    gb.add(cube(), C.wood, [0.3, 0.28, 0], [0, 0, 0], [0.032, 0.026, 0.82]);
+    gb.add(cube(), C.wood, [0.3, 0.21, 0], [0, 0, 0], [0.028, 0.02, 0.82]);
+    // A bollard at the head with a coil of rope, and a second one behind.
+    for (const [x, z] of [[-0.22, 0.4], [-0.22, 0.12]] as const) {
+      gb.add(plate(), C.woodDark, [x, 0.16, z], [0, 0, 0], [0.09, 0.14, 0.09]);
+      gb.add(plate(), C.iron, [x, 0.24, z], [0, 0, 0], [0.11, 0.02, 0.11]);
+      gb.add(ring(), 0xb8a68a, [x + 0.06, 0.12, z], [0.3, 0.4, 0], [0.12, 0.12, 0.12]);
+    }
+    // A ladder down to the water on the open side.
+    for (const sx of [-1, 1]) {
+      gb.add(post(), C.woodDark, [-0.38, 0.1, 0.26 + sx * 0.055], [0, 0, 0], [0.028, 0.5, 0.028]);
+    }
+    for (let i = 0; i < 4; i++) {
+      gb.add(cube(), C.wood, [-0.38, 0.28 - i * 0.1, 0.26], [0, 0, 0], [0.045, 0.018, 0.14]);
+    }
+    // Lantern on its post: the pier's light at dusk.
+    gb.add(post(), C.woodDark, [0.36, 0.24, -0.42], [0, 0, 0], [0.045, 0.44, 0.045]);
+    gb.add(cube(), C.ink, [0.36, 0.47, -0.42], [0, 0, 0], [0.11, 0.025, 0.11]);
+    gb.add(cube(), C.lamp, [0.36, 0.51, -0.42], [0, 0, 0], [0.08, 0.08, 0.08]);
+    gb.add(cube(), C.ink, [0.36, 0.56, -0.42], [0, 0, 0], [0.1, 0.02, 0.1]);
+    gb.light(0.36, 0.52, -0.42, 1.0);
+    if (level >= 2) {
+      // A wider head at the end of the jetty: where the boats tie up.
+      gb.add(cube(), C.wood, [0, deckY - 0.005, 0.3], [0, 0, 0], [wide + 0.16, 0.026, 0.34]);
+      gb.add(cube(), C.woodDark, [0, 0.045, 0.3], [0, 0, 0], [wide + 0.2, 0.04, 0.06]);
+      for (const sx of [-1, 1]) {
+        gb.add(post(), C.woodDark, [sx * (wide * 0.5 + 0.06), -0.2, 0.4], [0, 0, 0], [0.08, 0.6, 0.08]);
+      }
+      // Crates and a barrel waiting for the boat.
+      gb.add(cube(), 0xb59068, [0.16, 0.14, 0.06], [0, 0.3, 0], [0.14, 0.13, 0.14]);
+      gb.add(cube(), C.wood, [-0.06, 0.12, 0.02], [0, 0.1, 0], [0.12, 0.1, 0.12]);
+      gb.add(plate(), 0xc4633f, [0.18, 0.12, 0.26], [0, 0, 0], [0.12, 0.14, 0.12]);
+      gb.add(plate(), C.iron, [0.18, 0.19, 0.26], [0, 0, 0], [0.125, 0.02, 0.125]);
+    }
+    if (level >= 3) {
+      // A crane for the heavy cargo: mast, boom, pulley and hanging crate.
+      gb.add(post(), C.woodDark, [-0.3, 0.42, 0.42], [0, 0, 0], [0.06, 0.7, 0.06]);
+      gb.add(cube(), C.woodDark, [-0.12, 0.68, 0.42], [0, 0, 0], [0.42, 0.05, 0.05]);
+      gb.add(cube(), C.wood, [-0.3, 0.58, 0.42], [0, 0, 0.5], [0.045, 0.4, 0.045]);
+      gb.add(plate(), C.iron, [-0.12, 0.66, 0.42], [1.57, 0, 0], [0.09, 0.03, 0.09]);
+      gb.add(cube(), 0xb8a68a, [-0.12, 0.6, 0.42], [0, 0, 0], [0.012, 0.2, 0.012]);
+      gb.add(cube(), 0xb59068, [-0.12, 0.49, 0.42], [0, 0, 0], [0.12, 0.1, 0.1]);
+      gb.light(-0.3, 0.6, 0.42, 0.7);
+    }
+    void rnd;
   },
 
   field: (gb, rnd) => {

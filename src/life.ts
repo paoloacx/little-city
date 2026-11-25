@@ -113,6 +113,9 @@ const OPEN_PLAZAS: ReadonlySet<string> = new Set(['plaza', 'square']);
 
 export class Life {
   readonly group = new THREE.Group();
+  /** People (walkers and idlers) and the rest (animals, boats, balloon). */
+  private readonly peopleGroup = new THREE.Group();
+  private readonly propsGroup = new THREE.Group();
 
   private readonly walkers: Walker[] = [];
   private readonly idlers: Idler[] = [];
@@ -142,13 +145,44 @@ export class Life {
   constructor(
     private readonly surface: THREE.ShaderMaterial,
     private readonly glow: THREE.ShaderMaterial,
-  ) {}
+  ) {
+    this.group.add(this.peopleGroup, this.propsGroup);
+  }
 
   /** Rebuilds every living thing from the town as it stands now. */
-  build(resolved: Map<string, Resolved>, seed: number, lights: Light[]): void {
+  build(resolved: Map<string, Resolved>, seed: number): void {
     this.clear();
-    const random = rng((seed ^ 0x2545f491) >>> 0);
+    this.buildPeople(resolved, seed);
+    this.buildProps(resolved, seed);
+    this.buildSmoke(resolved, seed);
+  }
 
+  /** The town's shape changed: new streets, squares or houses to walk from. */
+  rebuildLife(resolved: Map<string, Resolved>, seed: number): void {
+    this.clearPeople();
+    this.clearProps();
+    this.buildPeople(resolved, seed);
+    this.buildProps(resolved, seed);
+  }
+
+  /** Only the heights changed: the chimneys move, the people stay as they are. */
+  rebuildSmoke(resolved: Map<string, Resolved>, seed: number): void {
+    if (this.smokePoints) {
+      this.group.remove(this.smokePoints);
+      this.smokePoints.geometry.dispose();
+      this.smokePoints = null;
+    }
+    this.buildSmoke(resolved, seed);
+  }
+
+  /** Streets, squares and doorsteps, read out of the resolved town. */
+  private layout(resolved: Map<string, Resolved>): {
+    roads: Map<string, Resolved>;
+    squares: Resolved[];
+    roadKeys: Set<string>;
+    plazas: Resolved[];
+    walkables: Resolved[];
+  } {
     const roads = new Map<string, Resolved>();
     const squares: Resolved[] = [];
     const openSquares: Resolved[] = [];
@@ -157,8 +191,17 @@ export class Life {
       if (PLAZAS.has(cell.role)) squares.push(cell);
       if (OPEN_PLAZAS.has(cell.role)) openSquares.push(cell);
     }
-    // People cross the squares too, so the streets lead somewhere.
-    const roadKeys = new Set([...roads.keys(), ...[...resolved.entries()].filter(([, c]) => PLAZAS.has(c.role)).map(([k]) => k)]);
+    const roadKeys = new Set([
+      ...roads.keys(),
+      ...[...resolved.entries()].filter(([, c]) => PLAZAS.has(c.role)).map(([k]) => k),
+    ]);
+    const plazas = openSquares.length > 0 ? openSquares : [...roads.values()];
+    return { roads, squares, roadKeys, plazas, walkables: [...roads.values(), ...plazas] };
+  }
+
+  private buildPeople(resolved: Map<string, Resolved>, seed: number): void {
+    const random = rng((seed ^ 0x2545f491) >>> 0);
+    const { roads, squares, roadKeys, plazas } = this.layout(resolved);
 
     // People walking: about one per street tile, with a soft cap for phones.
     const doorsteps: Resolved[] = [];
@@ -172,7 +215,9 @@ export class Life {
       }
     }
     const starts = [...roads.values(), ...doorsteps, ...squares];
-    const walkers = Math.min(26, Math.max(0, Math.floor((roads.size + squares.length) / 0.95)));
+    // A phone can take fewer people: half the figures, half the draw calls.
+    const crowd = typeof window !== 'undefined' && window.innerWidth < 720 ? 0.55 : 1;
+    const walkers = Math.min(26, Math.max(0, Math.floor(((roads.size + squares.length) / 0.95) * crowd)));
     for (let i = 0; i < walkers && starts.length > 0; i++) {
       const start = starts[Math.floor(random() * starts.length)];
       const path = this.walk(start, roadKeys, random);
@@ -182,7 +227,7 @@ export class Life {
       const tile = path[0];
       figure.group.position.set(worldX(tile.x), 0, worldZ(tile.z));
       figure.group.rotation.y = random() * Math.PI * 2;
-      this.group.add(figure.group);
+      this.peopleGroup.add(figure.group);
       this.walkers.push({
         ...figure,
         path,
@@ -196,8 +241,7 @@ export class Life {
     }
 
     // People standing about the square, never inside the bandstand.
-    const plazas = openSquares.length > 0 ? openSquares : [...roads.values()];
-    const idlers = Math.min(22, Math.ceil(plazas.length * 1.8));
+    const idlers = Math.min(22, Math.ceil(plazas.length * 1.8 * crowd));
     for (let i = 0; i < idlers && plazas.length > 0; i++) {
       const spot = plazas[Math.floor(random() * plazas.length)];
       const figure = this.figure(random, random() < 0.22 ? 0.235 : 0.29 + random() * 0.03);
@@ -206,7 +250,7 @@ export class Life {
       const reach = 0.4 + random() * 0.1;
       figure.group.position.set(worldX(spot.x) + Math.cos(around) * reach, 0, worldZ(spot.z) + Math.sin(around) * reach);
       figure.group.rotation.y = random() * Math.PI * 2;
-      this.group.add(figure.group);
+      this.peopleGroup.add(figure.group);
       this.idlers.push({
         group: figure.group,
         armL: figure.armL,
@@ -215,16 +259,20 @@ export class Life {
         phase: random() * 10,
       });
     }
+  }
+
+  private buildProps(resolved: Map<string, Resolved>, seed: number): void {
+    const random = rng((seed ^ 0x2545f491) >>> 0);
+    const { plazas, walkables } = this.layout(resolved);
 
     // Cats and pigeons: the small life of a square.
-    const walkables = [...roads.values(), ...plazas];
     for (let i = 0; i < Math.min(3, Math.floor(walkables.length / 8)); i++) {
       const spot = walkables[Math.floor(random() * walkables.length)];
       const cat = this.cat(random);
       if (!cat) continue;
       const origin = new THREE.Vector3(worldX(spot.x), 0, worldZ(spot.z));
       cat.group.position.copy(origin);
-      this.group.add(cat.group);
+      this.propsGroup.add(cat.group);
       this.cats.push({
         group: cat.group,
         tail: cat.tail,
@@ -243,7 +291,7 @@ export class Life {
       if (!dog) continue;
       const origin = new THREE.Vector3(worldX(spot.x), 0, worldZ(spot.z));
       dog.group.position.copy(origin);
-      this.group.add(dog.group);
+      this.propsGroup.add(dog.group);
       this.dogs.push({
         group: dog.group,
         tail: dog.tail,
@@ -259,7 +307,7 @@ export class Life {
     // One balloon over the island: the postcard of the whole town.
     const balloon = this.hotAirBalloon(random);
     if (balloon) {
-      this.group.add(balloon.group);
+      this.propsGroup.add(balloon.group);
       this.balloon = {
         group: balloon.group,
         radius: 4.6 + random() * 2.2,
@@ -275,7 +323,7 @@ export class Life {
       const pigeon = this.pigeon(random);
       if (!pigeon) continue;
       pigeon.position.set(worldX(spot.x) + (random() - 0.5) * 0.7, 0, worldZ(spot.z) + (random() - 0.5) * 0.7);
-      this.group.add(pigeon);
+      this.propsGroup.add(pigeon);
       this.pigeons.push({ group: pigeon, baseY: 0, phase: random() * 10 });
     }
 
@@ -284,7 +332,7 @@ export class Life {
     for (let i = 0; i < 3; i++) {
       const boat = makers[i % makers.length].call(this, random);
       if (!boat) continue;
-      this.group.add(boat.group);
+      this.propsGroup.add(boat.group);
       this.boats.push({
         group: boat.group,
         radius: 8.2 + random() * 2.2,
@@ -299,7 +347,7 @@ export class Life {
     for (let i = 0; i < 4; i++) {
       const gull = this.gull(random);
       if (!gull) continue;
-      this.group.add(gull.group);
+      this.propsGroup.add(gull.group);
       this.gulls.push({
         group: gull.group,
         wingL: gull.wingL,
@@ -311,8 +359,15 @@ export class Life {
         phase: random() * 10,
       });
     }
+  }
 
-    this.buildSmoke(resolved, random);
+  /** The lights moved: rebuild the glow and nothing else. */
+  setLights(lights: Light[]): void {
+    if (this.glowPoints) {
+      this.group.remove(this.glowPoints);
+      this.glowPoints.geometry.dispose();
+      this.glowPoints = null;
+    }
     this.buildGlow(lights);
   }
 
@@ -476,7 +531,8 @@ export class Life {
     }
   }
 
-  private buildSmoke(resolved: Map<string, Resolved>, random: () => number): void {
+  private buildSmoke(resolved: Map<string, Resolved>, seed: number): void {
+    const random = rng((seed ^ 0x9e3779b9) >>> 0);
     const pipes: Array<{ x: number; y: number; z: number; steam: boolean }> = [];
     for (const cell of resolved.values()) {
       if (!CHIMNEYS.has(cell.role)) continue;
@@ -859,14 +915,21 @@ export class Life {
   private gull(random: () => number): { group: THREE.Group; wingL: THREE.Object3D; wingR: THREE.Object3D } | null {
     const group = new THREE.Group();
     const body = new GeoBuilder();
-    body.add(blob(), 0xf6f1e4, [0, 0, 0], [0, 0, 0], [0.14, 0.09, 0.09]);
-    body.add(cube(), 0x3a2f2a, [0, 0.01, 0.08], [0, 0, 0], [0.03, 0.02, 0.03]);
+    body.add(blob(), 0xf6f1e4, [0, 0, 0], [0, 0, 0], [0.13, 0.085, 0.09]);
+    body.add(blob(), 0xf6f1e4, [0, 0.02, 0.05], [0, 0, 0], [0.09, 0.07, 0.08]);
+    // The tail fan and the beak, so the bird is not a paper plane.
+    body.add(cube(), 0xece4d3, [-0.11, 0.005, 0], [0, 0, 0.25], [0.1, 0.012, 0.05]);
+    body.add(cone(), 0xd9a14a, [0, 0.005, 0.11], [1.57, 0, 0], [0.03, 0.05, 0.03]);
+    body.add(cube(), 0x3a2f2a, [0, 0.012, 0.085], [0, 0, 0], [0.022, 0.014, 0.022]);
     const bodyGeometry = body.build();
     if (!bodyGeometry) return null;
     group.add(new THREE.Mesh(bodyGeometry, this.surface));
 
+    // Two panels per wing and a dark tip: with the famous gull bend.
     const wing = new GeoBuilder();
-    wing.add(cube(), 0xf6f1e4, [0.1, 0, 0], [0, 0, 0], [0.2, 0.012, 0.075]);
+    wing.add(cube(), 0xf6f1e4, [0.07, 0, 0], [0, 0, 0], [0.13, 0.014, 0.08]);
+    wing.add(cube(), 0xf6f1e4, [0.17, 0.012, 0], [0, 0, 0.12], [0.11, 0.012, 0.055]);
+    wing.add(cube(), 0x9aa0a8, [0.24, 0.02, 0], [0, 0, 0.12], [0.03, 0.012, 0.04]);
     const wingGeometry = wing.build();
     if (!wingGeometry) return null;
 
@@ -877,9 +940,43 @@ export class Life {
     right.scale.x = -1;
     left.position.x = 0.04;
     right.position.x = -0.04;
+    left.rotation.z = 0.12;
+    right.rotation.z = -0.12;
     group.add(left, right);
     group.scale.setScalar(0.42 + random() * 0.12);
     return { group, wingL: left, wingR: right };
+  }
+
+  private clearPeople(): void {
+    this.disposeGroup(this.peopleGroup);
+    for (const child of [...this.peopleGroup.children]) this.peopleGroup.remove(child);
+    this.walkers.length = 0;
+    this.idlers.length = 0;
+  }
+
+  private clearProps(): void {
+    this.disposeGroup(this.propsGroup);
+    for (const child of [...this.propsGroup.children]) this.propsGroup.remove(child);
+    this.cats.length = 0;
+    this.dogs.length = 0;
+    this.balloon = null;
+    this.pigeons.length = 0;
+    this.boats.length = 0;
+    this.gulls.length = 0;
+  }
+
+  private disposeGroup(group: THREE.Group): void {
+    const seen = new Set<THREE.BufferGeometry>();
+    group.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      const geometry = mesh.geometry as THREE.BufferGeometry | undefined;
+      if (geometry && !seen.has(geometry)) {
+        seen.add(geometry);
+        geometry.dispose?.();
+      }
+      const material = mesh.material as THREE.Material | undefined;
+      if (material instanceof THREE.MeshBasicMaterial) material.dispose();
+    });
   }
 
   private clear(): void {
@@ -891,17 +988,18 @@ export class Life {
       const material = (object as THREE.Mesh).material as THREE.Material | undefined;
       if (material instanceof THREE.MeshBasicMaterial) material.dispose();
     });
-    for (const child of [...this.group.children]) this.group.remove(child);
+    this.clearPeople();
+    this.clearProps();
+    if (this.glowPoints) {
+      this.group.remove(this.glowPoints);
+      this.glowPoints.geometry.dispose();
+    }
+    if (this.smokePoints) {
+      this.group.remove(this.smokePoints);
+      this.smokePoints.geometry.dispose();
+    }
     this.glowPoints = null;
     this.smokePoints = null;
-    this.walkers.length = 0;
-    this.idlers.length = 0;
-    this.cats.length = 0;
-    this.dogs.length = 0;
-    this.balloon = null;
-    this.pigeons.length = 0;
-    this.boats.length = 0;
-    this.gulls.length = 0;
   }
 
   dispose(): void {

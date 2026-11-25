@@ -6,6 +6,7 @@ import { GeoBuilder, Light, blob, cone, cube, panel, post, quad } from './geo';
 import { Resolved, resolveTown } from './rules';
 import { buildRole } from './buildings';
 import { Life } from './life';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   NIGHT_PAPER,
   PAPER,
@@ -19,6 +20,12 @@ import {
 
 const TILE = 1;
 const WATER_Y = -0.45;
+/** Picking happens on every pointer move: reuse the maths instead of making garbage. */
+const pickNdc = new THREE.Vector2();
+const pickRay = new THREE.Raycaster();
+const pickPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const pickHit = new THREE.Vector3();
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
 /** One day and one night. */
 const CYCLE = 210;
 
@@ -102,6 +109,22 @@ export class World {
   private readonly shadowMaterial = shadowMaterial();
   private readonly water = waterMaterial();
   private readonly ghostMat = ghostMaterial();
+  private readonly ghostInk = new THREE.Color(0x3a2f2a);
+  private readonly eraseInk = new THREE.Color(0xa9503a);
+  /** What the town looked like last time, so only what changed is rebuilt. */
+  private lifeLayout = '';
+  private lifeHeights = '';
+  private lifeSeed: number | null = null;
+  /** Where the last rebuild spent its time, in milliseconds. */
+  readonly timings = { build: 0, merge: 0, life: 0, total: 0 };
+  /**
+   * Each tile keeps its geometry between rebuilds. An edit only rebuilds the
+   * tiles whose role, height, turn or wall joins changed.
+   */
+  private readonly cellCache = new Map<
+    string,
+    { sig: string; geometry: THREE.BufferGeometry; shadow: THREE.BufferGeometry | null; lights: Light[] }
+  >();
   private readonly ghostBox = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.62), this.ghostMat);
   private readonly ghostPad = new THREE.Mesh(new THREE.PlaneGeometry(0.94, 0.94), this.ghostMat);
   private readonly shadowGeometry = (() => {
@@ -130,7 +153,12 @@ export class World {
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false,
+      powerPreference: 'high-performance',
+    });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setClearColor(PAPER, 1);
     THREE.ColorManagement.enabled = false;
@@ -160,6 +188,17 @@ export class World {
     return this.dusk;
   }
 
+  /** What the renderer is doing this frame: draws, triangles, programs. */
+  stats(): { calls: number; triangles: number; geometries: number; programs: number } {
+    const info = this.renderer.info;
+    return {
+      calls: info.render.calls,
+      triangles: info.render.triangles,
+      geometries: info.memory.geometries,
+      programs: info.programs?.length ?? 0,
+    };
+  }
+
   private buildWater(): void {
     const geo = new THREE.PlaneGeometry(64, 64, 1, 1);
     geo.rotateX(-Math.PI / 2);
@@ -178,6 +217,7 @@ export class World {
   setSeed(seed: number): void {
     this.seed = seed;
     this.mask = makeIsland(seed);
+    this.clearCellCache();
     this.clearGroup(this.terrain);
 
     this.biome = BIOMES[Math.floor(rng((seed ^ 0x51ed270b) >>> 0)() * BIOMES.length) % BIOMES.length];
@@ -238,12 +278,13 @@ export class World {
       wx + (random() - 0.5) * spread,
       wz + (random() - 0.5) * spread,
     ];
-    // Grass tufts are mounds, not needles: a blade thinner than the pen would
-    // come out as a black stroke.
+    // Grass tufts are little bushes, not needles: a blade thinner than the pen
+    // would come out as a black stroke, and a pale cone reads as a stray mark.
     const tuft = (x: number, z: number, scale = 1): void => {
       const turn = random() * 3;
-      gb.add(cone(), b.grass[0], [x, 0.004, z], [0, turn, 0], [0.18 * scale, 0.11 * scale, 0.18 * scale]);
-      gb.add(cone(), b.grass[0], [x + 0.06 * scale, 0.004, z - 0.045 * scale], [0, turn + 1, 0], [0.11 * scale, 0.08 * scale, 0.11 * scale]);
+      const tone = b.name === 'bosque' ? 0x5f7f4a : 0x6f9a52;
+      gb.add(blob(), tone, [x, 0.045 * scale, z], [0, turn, 0.2], [0.17 * scale, 0.1 * scale, 0.17 * scale]);
+      gb.add(blob(), tone, [x + 0.06 * scale, 0.035 * scale, z - 0.05 * scale], [0, turn + 1, -0.2], [0.11 * scale, 0.08 * scale, 0.11 * scale]);
     };
     const pebble = (x: number, z: number, scale = 1, color: number = b.pebble): void => {
       gb.add(blob(), color, [x, 0.03 * scale, z], [0, random() * 3, 0], [0.1 * scale, 0.07 * scale, 0.1 * scale]);
@@ -330,65 +371,160 @@ export class World {
     }
   }
 
-  /** Rebuilds every building from the current grid. */
+  /** Rebuilds the buildings that changed, then merges them into a few draws. */
   rebuild(town: Town): Map<string, Resolved> {
+    const started = performance.now();
+    this.timings.build = 0;
+    this.timings.merge = 0;
+    this.timings.life = 0;
     const resolved = resolveTown(town, this.mask);
     this.clearGroup(this.townGroup);
-    const geometries = new Set<THREE.BufferGeometry>();
+    const parts: THREE.BufferGeometry[] = [];
+    const shadows: THREE.BufferGeometry[] = [];
     const lights: Light[] = [];
+    const matrix = new THREE.Matrix4();
+    const shadowMatrix = new THREE.Matrix4();
+    const offset = new THREE.Vector3();
+    let layoutSig = `${this.seed}|`;
+    let heightsSig = `${this.seed}|`;
+    const alive = new Set<string>();
 
     for (const [key, cell] of resolved) {
-      const gb = new GeoBuilder();
-      const random = rng((this.seed * 7919 + cell.x * 131 + cell.z * 17) >>> 0);
-      buildRole(cell.role, cell.storeys, gb, random, cell.links);
-      const geometry = gb.build();
-      if (!geometry) continue;
-      geometries.add(geometry);
-
+      layoutSig += `${key}:${cell.role};`;
+      heightsSig += `${key}:${cell.role}:${cell.storeys};`;
+      alive.add(key);
       const onWater = !landAt(this.mask, cell.x, cell.z);
-      // A wall turns with the walls it joins, not with the player; a lone one
-      // can be turned by hand.
+      const random = rng((this.seed * 7919 + cell.x * 131 + cell.z * 17) >>> 0);
+      // The turn jitter is drawn first, so it does not depend on the role and
+      // the tile can be cached: a wall turns with the walls it joins, a lone
+      // one by hand, and a bridge across the water.
+      const jitter = (random() - 0.5) * 0.05;
       const align =
         cell.role === 'bridge'
           ? landAt(this.mask, cell.x, cell.z - 1) || landAt(this.mask, cell.x, cell.z + 1)
             ? Math.PI / 2
             : 0
           : cell.block === 'wall'
-            ? (cell.links === 0 ? (cell.rot * Math.PI) / 2 : 0)
-            : (cell.rot * Math.PI) / 2 + (random() - 0.5) * 0.05;
+            ? cell.links === 0
+              ? (cell.rot * Math.PI) / 2
+              : 0
+            : (cell.rot * Math.PI) / 2 + jitter;
       const baseY = onWater && cell.role === 'dock' ? WATER_Y : 0;
+      const wx = worldX(cell.x) * TILE;
+      const wz = worldZ(cell.z) * TILE;
+      const sig = `${cell.role}|${cell.storeys}|${cell.links}|${cell.rot}|${align.toFixed(4)}|${baseY}|${onWater}`;
 
-      const group = new THREE.Group();
-      const mesh = new THREE.Mesh(geometry, this.surface);
-      const ink = new THREE.Mesh(geometry, this.outline);
-      group.add(mesh, ink);
-      if (!onWater) {
-        const shadow = new THREE.Mesh(this.shadowGeometry, this.shadowMaterial);
-        shadow.position.set(0.1, 0.01, -0.08);
-        shadow.rotation.y = 0.3;
-        group.add(shadow);
+      let cached = this.cellCache.get(key);
+      if (cached && cached.sig !== sig) {
+        cached.geometry.dispose();
+        cached.shadow?.dispose();
+        this.cellCache.delete(key);
+        cached = undefined;
       }
-      group.position.set(worldX(cell.x) * TILE, baseY, worldZ(cell.z) * TILE);
-      group.rotation.y = align;
-      group.userData.key = key;
-      this.townGroup.add(group);
+      if (!cached) {
+        const buildStarted = performance.now();
+        const gb = new GeoBuilder();
+        buildRole(cell.role, cell.storeys, gb, random, cell.links);
+        const raw = gb.build();
+        if (raw) {
+          // One merged town: the cell geometry is baked into world space.
+          matrix.makeRotationY(align);
+          matrix.setPosition(wx, baseY, wz);
+          raw.applyMatrix4(matrix);
+          let shadow: THREE.BufferGeometry | null = null;
+          if (!onWater) {
+            shadow = this.shadowGeometry.clone();
+            offset.set(0.1, 0.01, -0.08).applyAxisAngle(Y_AXIS, align);
+            shadowMatrix.makeRotationY(align + 0.3);
+            shadowMatrix.setPosition(wx + offset.x, offset.y, wz + offset.z);
+            shadow.applyMatrix4(shadowMatrix);
+          }
+          const cos = Math.cos(align);
+          const sin = Math.sin(align);
+          const cellLights = gb.lights.map((light) => ({
+            x: wx + light.x * cos + light.z * sin,
+            y: baseY + light.y,
+            z: wz - light.x * sin + light.z * cos,
+            size: light.size,
+          }));
+          cached = { sig, geometry: raw, shadow, lights: cellLights };
+          this.cellCache.set(key, cached);
+        }
+        this.timings.build += performance.now() - buildStarted;
+        if (!cached) continue;
+      }
 
-      // The lights the builder left: windows, lamps, forges.
-      const cos = Math.cos(align);
-      const sin = Math.sin(align);
-      for (const light of gb.lights) {
-        lights.push({
-          x: group.position.x + light.x * cos + light.z * sin,
-          y: group.position.y + light.y,
-          z: group.position.z - light.x * sin + light.z * cos,
-          size: light.size,
-        });
-      }
+      parts.push(cached.geometry);
+      if (cached.shadow) shadows.push(cached.shadow);
+      for (const light of cached.lights) lights.push(light);
     }
 
-    this.townGroup.userData.geometries = geometries;
-    this.life.build(resolved, this.seed, lights);
+    // Tiles that are gone take their geometry with them.
+    for (const [key, entry] of this.cellCache) {
+      if (alive.has(key)) continue;
+      entry.geometry.dispose();
+      entry.shadow?.dispose();
+      this.cellCache.delete(key);
+    }
+
+    const owned = new Set<THREE.BufferGeometry>();
+    const mergeStarted = performance.now();
+    const merged = parts.length ? mergeGeometries(parts, false) : null;
+    if (merged) {
+      merged.computeBoundingSphere();
+      const mesh = new THREE.Mesh(merged, this.surface);
+      const ink = new THREE.Mesh(merged, this.outline);
+      mesh.frustumCulled = false;
+      ink.frustumCulled = false;
+      this.townGroup.add(mesh, ink);
+      owned.add(merged);
+    }
+
+    const ground = shadows.length ? mergeGeometries(shadows, false) : null;
+    if (ground) {
+      ground.computeBoundingSphere();
+      const mesh = new THREE.Mesh(ground, this.shadowMaterial);
+      mesh.frustumCulled = false;
+      this.townGroup.add(mesh);
+      owned.add(ground);
+    }
+
+    this.townGroup.userData.geometries = owned;
+    this.timings.merge = performance.now() - mergeStarted;
+
+    // People, boats and smoke only depend on what the town is made of and how
+    // tall it is, not on how it is turned: turning a house only moves its lights.
+    const lifeStarted = performance.now();
+    if (this.lifeSeed !== this.seed) {
+      this.lifeSeed = this.seed;
+      this.lifeLayout = layoutSig;
+      this.lifeHeights = heightsSig;
+      this.life.build(resolved, this.seed);
+    } else if (layoutSig !== this.lifeLayout) {
+      this.lifeLayout = layoutSig;
+      this.lifeHeights = heightsSig;
+      this.life.rebuildLife(resolved, this.seed);
+      this.life.rebuildSmoke(resolved, this.seed);
+    } else if (heightsSig !== this.lifeHeights) {
+      this.lifeHeights = heightsSig;
+      this.life.rebuildSmoke(resolved, this.seed);
+    }
+    this.life.setLights(lights);
+    this.timings.life = performance.now() - lifeStarted;
+    this.timings.total = performance.now() - started;
     return resolved;
+  }
+
+  /** Forgets every cached tile: used when the island changes under the town. */
+  private clearCellCache(): void {
+    for (const entry of this.cellCache.values()) {
+      entry.geometry.dispose();
+      entry.shadow?.dispose();
+    }
+    this.cellCache.clear();
+    this.lifeLayout = '';
+    this.lifeHeights = '';
+    this.lifeSeed = null;
   }
 
   /** Shows a ghost of the selected block on a tile, or hides it. */
@@ -403,25 +539,21 @@ export class World {
     this.ghostBox.scale.set(1, height / 0.62, 1);
     this.ghostBox.position.set(wx, height / 2, wz);
     this.ghostPad.position.set(wx, 0.02, wz);
-    const color = kind === 'erase' ? new THREE.Color(0xa9503a) : new THREE.Color(0x3a2f2a);
-    (this.ghostMat.uniforms.uInk.value as THREE.Color).copy(color);
+    (this.ghostMat.uniforms.uInk.value as THREE.Color).copy(kind === 'erase' ? this.eraseInk : this.ghostInk);
     this.ghostMat.uniforms.uAlpha.value = kind === 'erase' ? 0.32 : 0.22;
   }
 
   /** Turns a pointer position into a tile, or null when it misses the island. */
   pick(clientX: number, clientY: number): { x: number; z: number; land: boolean } | null {
     const rect = this.canvas.getBoundingClientRect();
-    const ndc = new THREE.Vector2(
+    pickNdc.set(
       ((clientX - rect.left) / rect.width) * 2 - 1,
       -((clientY - rect.top) / rect.height) * 2 + 1,
     );
-    const ray = new THREE.Raycaster();
-    ray.setFromCamera(ndc, this.camera);
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const hit = new THREE.Vector3();
-    if (!ray.ray.intersectPlane(plane, hit)) return null;
-    const x = Math.round(hit.x + HALF);
-    const z = Math.round(hit.z + HALF);
+    pickRay.setFromCamera(pickNdc, this.camera);
+    if (!pickRay.ray.intersectPlane(pickPlane, pickHit)) return null;
+    const x = Math.round(pickHit.x + HALF);
+    const z = Math.round(pickHit.z + HALF);
     if (x < 0 || z < 0 || x >= GRID || z >= GRID) return null;
     return { x, z, land: landAt(this.mask, x, z) };
   }
@@ -497,7 +629,8 @@ export class World {
 
     if (this.cycleOn) {
       const phase = ((this.time + this.clockOffset) % CYCLE) / CYCLE;
-      this.applyDusk(this.duskFor(phase));
+      const next = this.duskFor(phase);
+      if (Math.abs(next - this.dusk) > 0.002) this.applyDusk(next);
     }
     this.life.update(dt, this.time);
     this.renderer.render(this.scene, this.camera);
@@ -527,6 +660,7 @@ export class World {
 
   dispose(): void {
     this.disposed = true;
+    this.clearCellCache();
     this.renderer.setAnimationLoop(null);
     this.clearGroup(this.terrain);
     this.clearGroup(this.townGroup);

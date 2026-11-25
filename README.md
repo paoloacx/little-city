@@ -3,7 +3,7 @@
 Un diorama de pueblo dibujado a mano, en el navegador: colocas bloques en una isla y cada uno se
 convierte en algo distinto según sus vecinos y su altura, hasta cinco pisos. Es un MVP propio,
 inspirado en la mecánica de [Little City](https://littlecity.io) de Derek Yao, sin usar su código ni
-su arte: **58 formas** distintas, **48 hallazgos**, bloques que se desbloquean jugando y cuatro islas
+su arte: **62 formas** distintas, **52 hallazgos**, bloques que se desbloquean jugando y cuatro islas
 distintas.
 
 ```bash
@@ -34,7 +34,7 @@ npm run preview  # sirve dist/
   **dunas** o **roquedo**, con sus flores, setas, conchas o peñascos. **Vaciar** deja la isla en
   blanco.
 - **Compartir** copia un enlace con el pueblo dentro (el estado va en el `#` de la URL, sin servidor);
-  **Postal** descarga el diorama en PNG; **Guía** lista los 48 hallazgos; **Pueblos** guarda tres
+  **Postal** descarga el diorama en PNG; **Guía** lista los 52 hallazgos; **Pueblos** guarda tres
   partidas en el navegador para volver a ellas; **Foto** esconde la interfaz (Esc sale); **Sonido**
   enciende el viento y las gaviotas; **Ciclo** pone el día y la noche en marcha.
 - Al entrar por primera vez sale una tarjeta con las cuatro reglas del juego, y no vuelve a salir.
@@ -63,6 +63,12 @@ Y estas son las mezclas que no dependen de la altura:
 | Campo junto a un jardín | Viñedo, con parras y barricas |
 | Casa entre dos campos | Cuadra, con caballo y forraje |
 
+El **muelle** es un embarcadero de verdad: tablones separados sobre largueros, postes hincados en el
+agua con sus anillos de cuerda, norayes, escala, barandilla y farol. Con dos clics gana la cabeza en
+T donde atracan los botes, con cajas y un barril; con tres, una grúa con polea y caja colgando. El
+**muelle de piedra** son losas grandes con contrafuerte, anillas de amarre, escalones al agua y un
+barril.
+
 Y lo que pasa alrededor:
 
 - Si el vecino más alto está **tres o más niveles por encima**, la casilla se dibuja con un piso de
@@ -72,7 +78,7 @@ Y lo que pasa alrededor:
   casillas de alrededor, sin que nada se pierda.
 - La guía muestra los hallazgos que ya has visto y los que faltan en gris.
 
-## Los 48 hallazgos
+## Los 52 hallazgos
 
 Los edificios se pueden girar: con el botón **Girar** o la tecla **R**, sobre el que esté bajo el
 puntero o sobre el último que pusiste. Un cuarto de vuelta cada vez, y el giro se guarda con el
@@ -170,22 +176,21 @@ un piso, y una muralla junta convierte un rincón en fortaleza: todo se intercon
 | Archivo | Qué hace |
 |---|---|
 | `src/grid.ts` | rejilla, isla procedural (semilla), bloques con nivel, guardado en `localStorage` |
-| `src/rules.ts` | hechos de cada casilla (vecinos, agua, nivel, altura de alrededor) y 48 reglas ordenadas |
+| `src/rules.ts` | hechos de cada casilla (vecinos, agua, nivel, altura de alrededor) y 52 reglas ordenadas |
 | `src/grow.ts` | el generador de "crecer un pueblo": plaza, calles, callejón, castillo, granja, puerto |
 | `src/geo.ts` | acumula primitivas en una geometría con color por vértice y recoge las luces |
-| `src/buildings.ts` | los 58 roles en 3D: palacios, castillos, invernaderos, viñedos, cuadras, árboles que crecen |
+| `src/buildings.ts` | los 62 roles en 3D: palacios, castillos, invernaderos, viñedos, cuadras, muelles, árboles que crecen |
 | `src/materials.ts` | tinta en cinco manchas (sin rayado), agua con oleaje suave, humo y luces; `uDusk` mueve todo al atardecer |
 | `src/life.ts` | gente articulada, gatos, perros, palomas, globo aerostático, barcos con estela, gaviotas, humo |
-| `src/share.ts` | el pueblo en un enlace, con altura y giro de cada bloque |
+| `src/share.ts` | el pueblo en un enlace (`#p=semilla.xzkN…`), con altura y giro de cada bloque; lo valida al cargar |
 | `src/scene.ts` | cámara, isla con su bioma y sus hierbas, agua, sombras, reconstrucción, ciclo de luz y postal |
-| `src/share.ts` | codifica el pueblo en la URL (`#p=semilla.xzkN…`) y lo valida al cargar |
 | `src/guide.ts` | la guía de hallazgos |
 | `src/intro.ts` | la tarjeta de bienvenida, que se muestra una sola vez |
 | `src/saves.ts` | tres pueblos guardados en `localStorage`, con su fecha y sus hallazgos |
 | `src/audio.ts` | viento, agua y gaviotas con WebAudio: sin archivos de sonido |
 | `src/main.ts` | paleta con candados, puntero, pincel, deshacer, alturas, panel, avisos |
 
-Notas de implementación que costaron encontrar:
+### Notas que costaron encontrar
 
 - Las murallas y las casas nuevas comparten helpers: `wallArm`, `wallPier`, `wallStub` y `wallRun`
   dibujan los brazos según la máscara de vecinos (`LINK_N`, `LINK_E`, `LINK_S`, `LINK_W`), y los
@@ -211,11 +216,48 @@ Notas de implementación que costaron encontrar:
   opacidad de cada punto se calculan en el shader con el reloj, sin tocar la CPU.
 - Los edificios se reconstruyen al colocar, pero la vida se anima por reloj: los barcos, los perros,
   el globo y las gaviotas no saltan, porque su posición depende del tiempo y no de la reconstrucción.
+- El pueblo se dibuja en **tres llamadas**: una geometría fusionada para la superficie, otra (la
+  misma) para el contorno de tinta y una tercera para las sombras del suelo. Antes era una malla por
+  casilla, con su sombra: unas trescientas llamadas solo en edificios.
+- Cada casilla guarda su geometría entre reconstrucciones, con una firma (papel, pisos, enlace de
+  muralla, giro). Al colocar o girar algo solo se reconstruyen las casillas que cambian: una edición
+  cuesta unos 3-5 ms en vez de 50.
+- La vida se reconstruye por partes: la gente y los animales solo cuando cambia la forma del pueblo
+  (calles, plazas, casas), el humo solo cuando cambian las alturas, y las luces de las ventanas
+  siempre, que es baratísimo. Subir un piso ya no rehace cincuenta figuras.
+- Las primitivas (`cube`, `plate`, `post`, `blob`…) son instancias únicas y `GeoBuilder` copia sus
+  triángulos a arrays, sin crear una `BufferGeometry` por pieza. Eso dejó la construcción del pueblo
+  en un tercio del tiempo.
+- El `Raycaster` y sus vectores se reutilizan: el puntero llama a `pick` en cada movimiento.
+- En pantallas de menos de 720 px hay menos gente (55 %), que es donde más se notan las llamadas.
+- Con `npm run dev`, `__ciudad.stats()` y `__ciudad.rebuild(10)` dan llamadas de dibujo y milisegundos
+  de reconstrucción desde la consola.
 - Los enlaces llevan versión: `#p=3-…` guarda cinco caracteres por bloque (x, z, tipo, altura y
   giro); los enlaces antiguos, con cuatro, se siguen abriendo y entran con giro cero.
 - Deshacer guarda fotos del pueblo (semilla, bloques, altura, giro y clics) en memoria: cuesta cinco
   números por casilla y aguanta cuarenta pasos. El pincel recuerda la última casilla pintada para que un arrastre
   largo no convierta una casa en una torre.
+
+## Pruebas y rendimiento
+
+Antes de dar un cambio por bueno:
+
+```bash
+npx tsc --noEmit   # tipos
+npm run build      # el build que se publica
+```
+
+Lo medido en un pueblo de unos cien bloques, con la ventana quieta:
+
+| | antes | ahora |
+|---|---|---|
+| Primer dibujo del pueblo | ~70 ms | ~25 ms |
+| Colocar o girar un bloque | ~50 ms | 3-5 ms |
+| Cambiar una altura (solo la vida) | 12-19 ms | 0,2 ms |
+| Llamadas de dibujo del pueblo | ~300 | 3 (superficie, tinta y sombras) |
+
+Lo que queda en ~300 llamadas es la vida: cada caminante son seis piezas y cada quieto cuatro. Es el
+siguiente sitio donde apretar, fusionando brazos y piernas de los que no andan.
 
 ## Publicarlo en abierto
 
@@ -249,7 +291,7 @@ una URL pública al momento. También vale `npx vercel --prod` o `npx netlify de
 
 ## Qué falta respecto a la referencia
 
-1. Contenido: la referencia tiene 102 edificios especiales con guía; aquí hay 48.
+1. Contenido: la referencia tiene 102 edificios especiales con guía; aquí hay 52.
 2. Estaciones y clima: nieve, lluvia, fiestas y mercado con puestos que se montan.
 3. Objetos narrados: alguien llevando pan del horno al puesto, barcos que cargan y descargan.
 4. Una galería de postales (los pueblos guardados ya están, en tres huecos).
