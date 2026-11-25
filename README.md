@@ -74,6 +74,16 @@ Y lo que pasa alrededor:
 
 ## Los 48 hallazgos
 
+Los edificios se pueden girar: con el botón **Girar** o la tecla **R**, sobre el que esté bajo el
+puntero o sobre el último que pusiste. Un cuarto de vuelta cada vez, y el giro se guarda con el
+pueblo (también en los enlaces de compartir).
+
+Las murallas se unen solas: cada pieza mira a sus cuatro vecinos y saca un brazo hacia los que son
+muralla, así que una hilera se convierte en una cerca continua, la esquina gira y el torreón se
+levanta donde toca. Una pieza suelta se dibuja como un tramo corto con su puerta, y esa sí se puede
+girar a mano. La tapia, el adarve, el torreón, la fortaleza, el alcázar y la puerta de la muralla
+comparten altura y ejes para que todo encaje.
+
 Cada casilla se resuelve a partir de sus vecinos y de sus pisos. Manda la primera regla que encaja:
 
 | Regla | Se vuelve | Cuándo |
@@ -133,6 +143,11 @@ un piso, y una muralla junta convierte un rincón en fortaleza: todo se intercon
 
 ## Lo que se mueve
 
+- Las casas tienen oficio: la **casa solariega** crece junto a un jardín (con verja, parra y
+  cipreses), la **casa de pescadores** se queda en la orilla con la barca del revés y las redes
+  tendidas, la **casa torre** se arrima a dos torres y saca su escalera de caracol, y la **casa del
+  molinero** vive junto al molino, con polea y sacos de harina. Con la casa, la casa alta, la casona,
+  la vecindad y el palacio son nueve casas distintas.
 - La gente pasea por las calles y cruza la plaza con las piernas y los brazos articulados, y sale
   también de las casas que dan a la calle. En la plaza hay gente parada, meciéndose, y algunos niños.
   Van a escala de puerta y con cuerpo entero: piernas, zapatos, abrigo con fajín, manos, cuello, cara
@@ -161,6 +176,7 @@ un piso, y una muralla junta convierte un rincón en fortaleza: todo se intercon
 | `src/buildings.ts` | los 58 roles en 3D: palacios, castillos, invernaderos, viñedos, cuadras, árboles que crecen |
 | `src/materials.ts` | tinta en cinco manchas (sin rayado), agua con oleaje suave, humo y luces; `uDusk` mueve todo al atardecer |
 | `src/life.ts` | gente articulada, gatos, perros, palomas, globo aerostático, barcos con estela, gaviotas, humo |
+| `src/share.ts` | el pueblo en un enlace, con altura y giro de cada bloque |
 | `src/scene.ts` | cámara, isla con su bioma y sus hierbas, agua, sombras, reconstrucción, ciclo de luz y postal |
 | `src/share.ts` | codifica el pueblo en la URL (`#p=semilla.xzkN…`) y lo valida al cargar |
 | `src/guide.ts` | la guía de hallazgos |
@@ -171,6 +187,9 @@ un piso, y una muralla junta convierte un rincón en fortaleza: todo se intercon
 
 Notas de implementación que costaron encontrar:
 
+- Las murallas y las casas nuevas comparten helpers: `wallArm`, `wallPier`, `wallStub` y `wallRun`
+  dibujan los brazos según la máscara de vecinos (`LINK_N`, `LINK_E`, `LINK_S`, `LINK_W`), y los
+  remates son de hierro fino (`finial`, `chapelCross`).
 - El contorno es un *inverted hull*: la misma geometría en `BackSide`, empujada por la normal con un
   ruido. El trazo es fino (0,008 de mundo) a propósito: con un hull grueso las ventanas y las puertas
   desaparecían bajo la tinta, y la hierba o los matojos salían como garabatos negros. Por eso los
@@ -192,8 +211,10 @@ Notas de implementación que costaron encontrar:
   opacidad de cada punto se calculan en el shader con el reloj, sin tocar la CPU.
 - Los edificios se reconstruyen al colocar, pero la vida se anima por reloj: los barcos, los perros,
   el globo y las gaviotas no saltan, porque su posición depende del tiempo y no de la reconstrucción.
-- Deshacer guarda fotos del pueblo (semilla, bloques y clics) en memoria: cuesta cuatro números por
-  casilla y aguanta cuarenta pasos. El pincel recuerda la última casilla pintada para que un arrastre
+- Los enlaces llevan versión: `#p=3-…` guarda cinco caracteres por bloque (x, z, tipo, altura y
+  giro); los enlaces antiguos, con cuatro, se siguen abriendo y entran con giro cero.
+- Deshacer guarda fotos del pueblo (semilla, bloques, altura, giro y clics) en memoria: cuesta cinco
+  números por casilla y aguanta cuarenta pasos. El pincel recuerda la última casilla pintada para que un arrastre
   largo no convierta una casa en una torre.
 
 ## Publicarlo en abierto

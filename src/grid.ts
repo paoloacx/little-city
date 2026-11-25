@@ -49,13 +49,21 @@ export const UNLOCK_AT: Partial<Record<BlockKind, number>> = {
   wall: 16,
 };
 
-/** A placed block carries its height: click again to build up. */
+/** A placed block carries its height and its turn: click again to build up. */
 export interface Placed {
   kind: BlockKind;
   level: number;
+  /** Quarter turns, 0..3: each building can be turned to face any way. */
+  rot?: number;
 }
 
 export const key = (x: number, z: number): string => `${x},${z}`;
+
+/** The four sides of a tile: a bit each, for walls that join their neighbours. */
+export const LINK_N = 1;
+export const LINK_E = 2;
+export const LINK_S = 4;
+export const LINK_W = 8;
 
 export interface Town {
   seed: number;
@@ -64,7 +72,7 @@ export interface Town {
 
 export interface SavedTown {
   seed: number;
-  blocks: [number, number, BlockKind, number][];
+  blocks: [number, number, BlockKind, number, number?][];
   found: string[];
   clicks: number;
 }
@@ -132,12 +140,18 @@ export function loadSaved(): SavedTown | null {
     if (!raw) return null;
     const data = JSON.parse(raw) as { seed?: unknown; blocks?: unknown; found?: unknown; clicks?: unknown };
     if (!data || typeof data.seed !== 'number' || !Array.isArray(data.blocks)) return null;
-    const blocks: [number, number, BlockKind, number][] = [];
+    const blocks: [number, number, BlockKind, number, number?][] = [];
     for (const entry of data.blocks as unknown[]) {
       if (!Array.isArray(entry) || entry.length < 3) continue;
-      const [x, z, kind, level] = entry as [unknown, unknown, unknown, unknown];
+      const [x, z, kind, level, rot] = entry as [unknown, unknown, unknown, unknown, unknown];
       if (typeof x !== 'number' || typeof z !== 'number' || typeof kind !== 'string') continue;
-      blocks.push([x, z, kind as BlockKind, typeof level === 'number' ? level : 1]);
+      blocks.push([
+        x,
+        z,
+        kind as BlockKind,
+        typeof level === 'number' ? level : 1,
+        typeof rot === 'number' ? rot : 0,
+      ]);
     }
     return {
       seed: data.seed,
@@ -155,7 +169,7 @@ export function saveTown(town: Town, found: Set<string>, clicks = 0): void {
     seed: town.seed,
     blocks: [...town.blocks].map(([k, placed]) => {
       const [x, z] = k.split(',').map(Number);
-      return [x, z, placed.kind, placed.level];
+      return [x, z, placed.kind, placed.level, placed.rot ?? 0] as [number, number, BlockKind, number, number];
     }),
     found: [...found],
     clicks,

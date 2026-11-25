@@ -4,12 +4,13 @@
  * placing blocks feel like a puzzle instead of a paint job.
  */
 
-import { BlockKind, GRID, key, landAt, isShore, Town } from './grid';
+import { BlockKind, GRID, LINK_E, LINK_N, LINK_S, LINK_W, key, landAt, isShore, Town } from './grid';
 
 export type Role =
   | 'house' | 'townhouse' | 'manor' | 'chapel' | 'cathedral' | 'shop' | 'cottage' | 'barn'
   | 'lighthouse' | 'stall' | 'inn' | 'boathouse' | 'schoolhouse' | 'smithy' | 'warehouse' | 'townhall'
   | 'tenement' | 'palace' | 'spire' | 'greattower' | 'citadel' | 'library' | 'greatoak'
+  | 'villa' | 'fisherhouse' | 'towerhouse' | 'millhouse'
   | 'tower' | 'belltower' | 'watchtower' | 'keep' | 'clocktower' | 'observatory' | 'dovecote'
   | 'windmill' | 'watermill'
   | 'street' | 'quay' | 'bridge'
@@ -45,6 +46,10 @@ export const ROLES: Record<Role, RoleDef> = {
   warehouse: { label: 'Almacén', special: true, how: 'Una casa entre dos embarcaderos.' },
   townhall: { label: 'Ayuntamiento', special: true, how: 'Una casa alta junto a la plaza, con una calle.' },
   tenement: { label: 'Casa de vecindad', special: true, how: 'Una casa de cuatro pisos.' },
+  villa: { label: 'Casa solariega', special: true, how: 'Una casa baja junto a un jardín, con verja y parra.' },
+  fisherhouse: { label: 'Casa de pescadores', special: true, how: 'Una casa baja en la orilla, lejos del embarcadero.' },
+  towerhouse: { label: 'Casa torre', special: true, how: 'Una casa baja entre dos torres, con escalera de caracol.' },
+  millhouse: { label: 'Casa del molinero', special: true, how: 'Una casa baja junto a un molino, con sacos y polea.' },
   palace: { label: 'Palacio', special: true, how: 'Una casa de cinco pisos, con su cimborrio.' },
   spire: { label: 'Aguja', special: true, how: 'Una torre de cuatro pisos junto a las casas.' },
   greattower: { label: 'Torre maestra', special: true, how: 'Una torre de cinco pisos.' },
@@ -172,6 +177,9 @@ export const RULES: Rule[] = [
   { id: 'R-T07', role: 'watchtower', when: (f) => f.block === 'tower' && f.level >= 3 },
   { id: 'R-T02', role: 'belltower', when: (f) => f.block === 'tower' && f.level >= 2 },
 
+  // A house hemmed in by towers grows a turret of its own.
+  { id: 'R-H25', role: 'towerhouse', when: (f) => f.block === 'house' && f.level <= 2 && f.around.tower >= 2 },
+
   // Houses that lean on a tower.
   { id: 'R-C02', role: 'cathedral', when: (f) => f.block === 'house' && f.level >= 2 && f.side.tower >= 1 },
   { id: 'R-H01', role: 'chapel', when: (f) => f.block === 'house' && f.side.tower >= 1 },
@@ -193,6 +201,15 @@ export const RULES: Rule[] = [
     role: 'schoolhouse',
     when: (f) => f.block === 'house' && f.around.plaza >= 1 && f.around.house >= 2,
   },
+
+  // Small houses with a trade, before the height rules claim them.
+  {
+    id: 'R-H26',
+    role: 'fisherhouse',
+    when: (f) => f.block === 'house' && f.level <= 2 && f.shore && f.around.dock === 0,
+  },
+  { id: 'R-H27', role: 'millhouse', when: (f) => f.block === 'house' && f.level <= 2 && f.around.mill >= 1 },
+  { id: 'R-H28', role: 'villa', when: (f) => f.block === 'house' && f.level <= 2 && f.around.garden >= 1 },
 
   // Height alone: the tallest wins.
   { id: 'R-C03', role: 'palace', when: (f) => f.block === 'house' && f.level >= 5 },
@@ -239,6 +256,10 @@ export interface Resolved {
   x: number;
   z: number;
   rule: string | null;
+  /** Quarter turns the player gave this block. */
+  rot: number;
+  /** For walls: which sides carry on into a neighbouring wall. */
+  links: number;
 }
 
 export function gatherFacts(
@@ -296,6 +317,15 @@ export function resolveTown(town: Town, mask: boolean[][]): Map<string, Resolved
     // A house leans on its tall neighbour and gains a floor: nothing is broken,
     // the town just grows into itself.
     const storeys = Math.min(5, placed.level + (facts.top >= placed.level + 3 ? 1 : 0));
+    let links = 0;
+    if (placed.kind === 'wall') {
+      const wall = (dx: number, dz: number): boolean =>
+        town.blocks.get(key(x + dx, z + dz))?.kind === 'wall';
+      if (wall(0, -1)) links |= LINK_N;
+      if (wall(1, 0)) links |= LINK_E;
+      if (wall(0, 1)) links |= LINK_S;
+      if (wall(-1, 0)) links |= LINK_W;
+    }
     out.set(k, {
       role: rule ? rule.role : BASE_ROLE[placed.kind],
       block: placed.kind,
@@ -304,6 +334,8 @@ export function resolveTown(town: Town, mask: boolean[][]): Map<string, Resolved
       x,
       z,
       rule: rule?.id ?? null,
+      rot: ((placed.rot ?? 0) % 4 + 4) % 4,
+      links,
     });
   }
   return out;

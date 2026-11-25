@@ -27,6 +27,7 @@ const guideEl = document.getElementById('guide') as HTMLButtonElement;
 const soundEl = document.getElementById('sound') as HTMLButtonElement;
 const cycleEl = document.getElementById('cycle') as HTMLButtonElement;
 const undoEl = document.getElementById('undo') as HTMLButtonElement;
+const rotateEl = document.getElementById('rotate') as HTMLButtonElement;
 const brushEl = document.getElementById('brush') as HTMLButtonElement;
 
 const world = new World(canvas);
@@ -48,11 +49,13 @@ let clicks = 0;
 interface Snapshot {
   seed: number;
   clicks: number;
-  blocks: [string, BlockKind, number][];
+  blocks: [string, BlockKind, number, number][];
 }
 const undoStack: Snapshot[] = [];
 const HISTORY_MAX = 40;
 let brush = false;
+/** The last block the player put down: the turn button works on it. */
+let lastPlaced: { x: number; z: number } | null = null;
 let lastPaint: { x: number; z: number } | null = null;
 
 const shared = townFromHash();
@@ -62,7 +65,7 @@ if (shared) {
 } else if (stored) {
   town = {
     seed: stored.seed,
-    blocks: new Map(stored.blocks.map(([x, z, kind, level]) => [key(x, z), { kind, level }])),
+    blocks: new Map(stored.blocks.map(([x, z, kind, level, rot]) => [key(x, z), { kind, level, rot: rot ?? 0 }])),
   };
   for (const role of stored.found) found.add(role);
   clicks = stored.clicks;
@@ -88,7 +91,9 @@ function snapshot(): Snapshot {
   return {
     seed: town.seed,
     clicks,
-    blocks: [...town.blocks].map(([k, placed]) => [k, placed.kind, placed.level] as [string, BlockKind, number]),
+    blocks: [...town.blocks].map(
+      ([k, placed]) => [k, placed.kind, placed.level, placed.rot ?? 0] as [string, BlockKind, number, number],
+    ),
   };
 }
 
@@ -105,9 +110,10 @@ function restore(snap: Snapshot): void {
   }
   town = {
     seed: snap.seed,
-    blocks: new Map(snap.blocks.map(([k, kind, level]) => [k, { kind, level }])),
+    blocks: new Map(snap.blocks.map(([k, kind, level, rot]) => [k, { kind, level, rot }])),
   };
   clicks = snap.clicks;
+  lastPlaced = null;
   clickEl.textContent = String(clicks);
 }
 
@@ -255,8 +261,9 @@ function place(x: number, z: number): void {
     current.level += 1;
   } else {
     pushHistory();
-    town.blocks.set(k, { kind: tool, level: 1 });
+    town.blocks.set(k, { kind: tool, level: 1, rot: 0 });
   }
+  lastPlaced = { x, z };
   clicks += 1;
   syncClicks();
   ambience.tick();
@@ -282,8 +289,9 @@ function paintAt(x: number, z: number): void {
   } else {
     if (current && current.kind === tool) return;
     pushHistory();
-    town.blocks.set(k, { kind: tool, level: 1 });
+    town.blocks.set(k, { kind: tool, level: 1, rot: 0 });
   }
+  lastPlaced = { x, z };
   clicks += 1;
   syncClicks();
   ambience.tick();
@@ -309,11 +317,57 @@ function placeMax(x: number, z: number): void {
     return;
   }
   pushHistory();
-  town.blocks.set(k, { kind: tool, level: MAX_LEVEL });
+  town.blocks.set(k, { kind: tool, level: MAX_LEVEL, rot: current?.rot ?? 0 });
+  lastPlaced = { x, z };
   clicks += 1;
   syncClicks();
   ambience.tick();
   apply();
+}
+
+const UNTURNABLE: ReadonlySet<BlockKind> = new Set<BlockKind>(['tree', 'field', 'garden']);
+
+/** Whether a wall at this tile is already tied into its neighbours. */
+function wallJoined(x: number, z: number): boolean {
+  return (
+    town.blocks.get(key(x + 1, z))?.kind === 'wall' ||
+    town.blocks.get(key(x - 1, z))?.kind === 'wall' ||
+    town.blocks.get(key(x, z + 1))?.kind === 'wall' ||
+    town.blocks.get(key(x, z - 1))?.kind === 'wall'
+  );
+}
+
+/**
+ * Turns one building a quarter turn: the one under the pointer if there is
+ * one, and otherwise the last one placed.
+ */
+function rotateBlock(): void {
+  const hit = world.pick(lastPointer.x, lastPointer.y);
+  const target = hit && town.blocks.has(key(hit.x, hit.z)) ? { x: hit.x, z: hit.z } : lastPlaced;
+  if (!target) {
+    toast('Coloca algo y pulsa Girar para darle la vuelta');
+    return;
+  }
+  const placed = town.blocks.get(key(target.x, target.z));
+  if (!placed) {
+    lastPlaced = null;
+    toast('Ahí ya no hay nada que girar');
+    return;
+  }
+  if (UNTURNABLE.has(placed.kind)) {
+    toast('Eso no tiene cara: no hace falta girarlo');
+    return;
+  }
+  if (placed.kind === 'wall' && wallJoined(target.x, target.z)) {
+    toast('La muralla se une sola: no hay que girarla');
+    return;
+  }
+  pushHistory();
+  placed.rot = ((placed.rot ?? 0) + 1) % 4;
+  lastPlaced = target;
+  apply();
+  const def = BLOCK_DEFS.find((b) => b.kind === placed.kind);
+  toast(`${def?.label ?? ''} girada`);
 }
 
 function updateGhost(clientX: number, clientY: number): void {
@@ -423,8 +477,8 @@ canvas.addEventListener('pointercancel', (event) => release(event, false));
 canvas.addEventListener('pointerleave', () => {
   world.setGhost(null, null);
   hintEl.textContent = brush
-    ? 'Pincel: arrastra para pintar · Shift para girar · rueda para acercar'
-    : 'Arrastra para girar · rueda para acercar · toca para colocar';
+    ? 'Pincel: arrastra para pintar · Shift para girar · R gira una casa'
+    : 'Arrastra para girar la isla · rueda para acercar · R gira el edificio';
 });
 
 canvas.addEventListener(
@@ -448,6 +502,10 @@ window.addEventListener('keydown', (event) => {
   }
   if (event.key === 'b' || event.key === 'B') {
     setBrush(!brush);
+    return;
+  }
+  if (event.key === 'r' || event.key === 'R') {
+    rotateBlock();
     return;
   }
   // 1..9 and then 0 for the tenth block.
@@ -521,6 +579,7 @@ function setBrush(on: boolean): void {
 
 brushEl.addEventListener('click', () => setBrush(!brush));
 undoEl.addEventListener('click', () => undo());
+rotateEl.addEventListener('click', () => rotateBlock());
 
 growEl.addEventListener('click', () => {
   pushHistory();
@@ -610,7 +669,7 @@ function currentSlot(): SlotData {
     seed: town.seed,
     blocks: [...town.blocks].map(([k, placed]) => {
       const [x, z] = k.split(',').map(Number);
-      return [x, z, placed.kind, placed.level] as [number, number, BlockKind, number];
+      return [x, z, placed.kind, placed.level, placed.rot ?? 0] as [number, number, BlockKind, number, number];
     }),
     found: [...found],
     clicks,
@@ -622,7 +681,7 @@ function loadSlot(data: SlotData): void {
   pushHistory();
   town = {
     seed: data.seed,
-    blocks: new Map(data.blocks.map(([x, z, kind, level]) => [key(x, z), { kind, level }])),
+    blocks: new Map(data.blocks.map(([x, z, kind, level, rot]) => [key(x, z), { kind, level, rot: rot ?? 0 }])),
   };
   found.clear();
   for (const role of data.found) found.add(role);

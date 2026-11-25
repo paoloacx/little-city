@@ -26,7 +26,10 @@
       </div>
       <div class="lc-finds-actions">
         <button id="undo" type="button" class="lc-quiet" disabled title="Deshacer el último cambio (Ctrl+Z)">Deshacer</button>
-        <button id="brush" type="button" class="lc-quiet" aria-pressed="false" title="Arrastra para pintar varias casillas; con Shift, giras la isla">Pincel: no</button>
+        <button id="rotate" type="button" class="lc-quiet" title="Gira el edificio bajo el puntero, o el último que pusiste (R)">Girar</button>
+      </div>
+      <div class="lc-finds-actions">
+        <button id="brush" type="button" class="lc-quiet lc-wide" aria-pressed="false" title="Arrastra para pintar varias casillas; con Shift, giras la isla">Pincel: no</button>
       </div>
       <div class="lc-finds-more">
         <button id="share" type="button" title="Copia un enlace con este pueblo dentro">Compartir</button>
@@ -41,7 +44,7 @@
 
     <div id="palette" class="lc-palette" role="toolbar" aria-label="Bloques"></div>
 
-    <p class="lc-hint">Arrastra para girar · rueda para acercar · toca para colocar</p>
+    <p class="lc-hint">Arrastra para girar la isla · rueda para acercar · R gira el edificio</p>
 
     <noscript>Necesitas JavaScript para dibujar el pueblo.</noscript>
     <script type="module" src="/src/main.ts"></script>

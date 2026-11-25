@@ -340,18 +340,22 @@ export class World {
     for (const [key, cell] of resolved) {
       const gb = new GeoBuilder();
       const random = rng((this.seed * 7919 + cell.x * 131 + cell.z * 17) >>> 0);
-      buildRole(cell.role, cell.storeys, gb, random);
+      buildRole(cell.role, cell.storeys, gb, random, cell.links);
       const geometry = gb.build();
       if (!geometry) continue;
       geometries.add(geometry);
 
       const onWater = !landAt(this.mask, cell.x, cell.z);
+      // A wall turns with the walls it joins, not with the player; a lone one
+      // can be turned by hand.
       const align =
         cell.role === 'bridge'
           ? landAt(this.mask, cell.x, cell.z - 1) || landAt(this.mask, cell.x, cell.z + 1)
             ? Math.PI / 2
             : 0
-          : (random() - 0.5) * 0.05;
+          : cell.block === 'wall'
+            ? (cell.links === 0 ? (cell.rot * Math.PI) / 2 : 0)
+            : (cell.rot * Math.PI) / 2 + (random() - 0.5) * 0.05;
       const baseY = onWater && cell.role === 'dock' ? WATER_Y : 0;
 
       const group = new THREE.Group();

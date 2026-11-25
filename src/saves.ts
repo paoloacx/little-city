@@ -4,7 +4,7 @@ import { BlockKind } from './grid';
 
 export interface SlotData {
   seed: number;
-  blocks: [number, number, BlockKind, number][];
+  blocks: [number, number, BlockKind, number, number?][];
   found: string[];
   clicks: number;
   savedAt: number;
