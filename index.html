@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#f2ede3" />
+    <title>Ciudad pequeña: un diorama de pueblo dibujado a mano</title>
+    <meta name="description" content="Coloca unos bloques y mira cómo se vuelven un pueblo: casas, capilla, faro, molino, torres. Un diorama dibujado a mano en tu navegador." />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🏘️</text></svg>" />
+  </head>
+  <body>
+    <canvas id="town" aria-label="Tu pueblo, dibujado a tinta y lápiz"></canvas>
+
+    <header class="lc-head">
+      <h1>Ciudad pequeña</h1>
+      <p>Coloca bloques: lo que se vuelven depende de dónde los pongas.</p>
+    </header>
+
+    <aside class="lc-finds">
+      <div class="lc-finds-count"><strong id="found-count">0</strong><span>de <span id="found-total">0</span> hallazgos</span></div>
+      <div class="lc-clicks" id="click-row"><span>Clics</span><strong id="click-count">0</strong></div>
+      <p id="found-last" class="lc-finds-last">Todavía no hay nada especial.</p>
+      <div class="lc-finds-actions">
+        <button id="grow" type="button" title="Genera un pueblo nuevo en otra isla">Crecer</button>
+        <button id="clear" type="button" class="lc-quiet">Vaciar</button>
+      </div>
+      <div class="lc-finds-more">
+        <button id="share" type="button" title="Copia un enlace con este pueblo dentro">Compartir</button>
+        <button id="postcard" type="button" title="Descarga el diorama como postal PNG">Postal</button>
+        <button id="guide" type="button" title="Todos los hallazgos y cómo conseguirlos">Guía</button>
+        <button id="sound" type="button" aria-pressed="false" title="Viento, agua y gaviotas">Sonido: no</button>
+        <button id="cycle" type="button" aria-pressed="true" class="lc-wide" title="Día y noche, o siempre de día">Ciclo: sí</button>
+      </div>
+    </aside>
+
+    <div id="palette" class="lc-palette" role="toolbar" aria-label="Bloques"></div>
+
+    <p class="lc-hint">Arrastra para girar · rueda para acercar · toca para colocar</p>
+
+    <noscript>Necesitas JavaScript para dibujar el pueblo.</noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

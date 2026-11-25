@@ -1,0 +1,299 @@
+/**
+ * The rules. Each block is read together with its neighbourhood and its height,
+ * and the first rule that matches decides what it becomes. This is what makes
+ * placing blocks feel like a puzzle instead of a paint job.
+ */
+
+import { BlockKind, GRID, key, landAt, isShore, Town } from './grid';
+
+export type Role =
+  | 'house' | 'townhouse' | 'manor' | 'chapel' | 'cathedral' | 'shop' | 'cottage' | 'barn'
+  | 'lighthouse' | 'stall' | 'inn' | 'boathouse' | 'schoolhouse' | 'smithy' | 'warehouse' | 'townhall'
+  | 'tenement' | 'palace' | 'spire' | 'greattower' | 'citadel' | 'library' | 'greatoak'
+  | 'tower' | 'belltower' | 'watchtower' | 'keep' | 'clocktower' | 'observatory' | 'dovecote'
+  | 'windmill' | 'watermill'
+  | 'street' | 'quay' | 'bridge'
+  | 'plaza' | 'square' | 'theatre' | 'bandstand'
+  | 'tree' | 'orchard'
+  | 'garden' | 'park' | 'greenhouse' | 'maze' | 'arboretum'
+  | 'wall' | 'rampart' | 'bastion' | 'fortress' | 'alcazar'
+  | 'dock' | 'field';
+
+export interface RoleDef {
+  label: string;
+  /** A discovery: it counts towards the finds panel. */
+  special: boolean;
+  how: string;
+}
+
+export const ROLES: Record<Role, RoleDef> = {
+  house: { label: 'Casa', special: false, how: 'Una casa sola, con su puerta y su ventana.' },
+  townhouse: { label: 'Casa alta', special: true, how: 'Una casa con un piso más (dos clics en la casilla).' },
+  manor: { label: 'Casona', special: true, how: 'Una casa de tres pisos (tres clics en la casilla).' },
+  chapel: { label: 'Capilla', special: true, how: 'Una casa pegada a una torre.' },
+  cathedral: { label: 'Catedral', special: true, how: 'Una casa de dos o tres pisos junto a una torre.' },
+  shop: { label: 'Tienda', special: true, how: 'Una casa abierta a dos calles.' },
+  cottage: { label: 'Casa de campo', special: true, how: 'Una casa entre dos o más árboles.' },
+  barn: { label: 'Granero', special: true, how: 'Una casa junto a un campo.' },
+  lighthouse: { label: 'Faro', special: true, how: 'Una torre en la orilla. Más alta, si la subes.' },
+  stall: { label: 'Puesto de mercado', special: true, how: 'Una casa entre la plaza y el camino.' },
+  boathouse: { label: 'Casa de botes', special: true, how: 'Una casa junto a un embarcadero.' },
+  inn: { label: 'Posada', special: true, how: 'Una casa en el rincón de la plaza, con dos calles.' },
+  schoolhouse: { label: 'Escuela', special: true, how: 'Una casa junto a la plaza, con dos casas alrededor.' },
+  smithy: { label: 'Herrería', special: true, how: 'Una casa junto a un campo y un camino.' },
+  warehouse: { label: 'Almacén', special: true, how: 'Una casa entre dos embarcaderos.' },
+  townhall: { label: 'Ayuntamiento', special: true, how: 'Una casa alta junto a la plaza, con una calle.' },
+  tenement: { label: 'Casa de vecindad', special: true, how: 'Una casa de cuatro pisos.' },
+  palace: { label: 'Palacio', special: true, how: 'Una casa de cinco pisos, con su cimborrio.' },
+  spire: { label: 'Aguja', special: true, how: 'Una torre de cuatro pisos junto a las casas.' },
+  greattower: { label: 'Torre maestra', special: true, how: 'Una torre de cinco pisos.' },
+  citadel: { label: 'Ciudadela', special: true, how: 'Un castillo con una torre de cuatro pisos o más.' },
+  library: { label: 'Biblioteca', special: true, how: 'Una casa alta junto a la plaza, con casas alrededor.' },
+  greatoak: { label: 'Roble', special: true, how: 'El gran roble: sigue creciendo en el cuarto y el quinto clic.' },
+  tower: { label: 'Torre', special: false, how: 'Una torre sola.' },
+  belltower: { label: 'Campanario', special: true, how: 'Una torre con un piso más.' },
+  watchtower: { label: 'Atalaya', special: true, how: 'Una torre de tres pisos.' },
+  keep: { label: 'Castillo', special: true, how: 'Tres torres juntas. Si las subes, crece.' },
+  clocktower: { label: 'Torre del reloj', special: true, how: 'Una torre con dos calles y una casa cerca.' },
+  observatory: { label: 'Observatorio', special: true, how: 'Una torre junto a la plaza.' },
+  dovecote: { label: 'Palomar', special: true, how: 'Una torre entre dos árboles.' },
+  windmill: { label: 'Molino', special: false, how: 'Un molino con sus aspas.' },
+  watermill: { label: 'Molino de agua', special: true, how: 'Un molino junto al agua.' },
+  street: { label: 'Calle', special: false, how: 'Un camino, con sus farolas.' },
+  quay: { label: 'Muelle de piedra', special: true, how: 'Un camino que toca el agua.' },
+  bridge: { label: 'Puente', special: true, how: 'Un camino puesto sobre el agua.' },
+  plaza: { label: 'Plaza', special: false, how: 'Un suelo empedrado.' },
+  square: { label: 'Plaza con fuente', special: true, how: 'Cuatro plazas juntas.' },
+  theatre: { label: 'Teatro', special: true, how: 'Una plaza junto a una torre.' },
+  bandstand: { label: 'Templete', special: true, how: 'Una plaza entre tres árboles o más.' },
+  tree: { label: 'Árbol', special: false, how: 'Un árbol: cada clic lo hace más alto y más ancho.' },
+  orchard: { label: 'Huerto', special: true, how: 'Cuatro árboles juntos.' },
+  dock: { label: 'Embarcadero', special: false, how: 'Un muelle de tablas, en tierra o sobre el agua.' },
+  field: { label: 'Campo', special: false, how: 'Un campo arado.' },
+  garden: { label: 'Jardín', special: false, how: 'Un jardín con sus setos, sus flores y su pajarera.' },
+  park: { label: 'Parque', special: true, how: 'Un jardín de dos clics: árboles, bancos y un estanque.' },
+  greenhouse: { label: 'Invernadero', special: true, how: 'Un jardín de tres clics, con cristaleras.' },
+  maze: { label: 'Laberinto', special: true, how: 'Un jardín de cuatro clics: setos en laberinto.' },
+  arboretum: { label: 'Arboreto', special: true, how: 'Un jardín de cinco clics, con árboles de todo el mundo.' },
+  wall: { label: 'Tapia', special: false, how: 'Una tapia de piedra con su puerta.' },
+  rampart: { label: 'Muralla', special: true, how: 'Una tapia de dos clics, con adarve y almenas.' },
+  bastion: { label: 'Torreón', special: true, how: 'Una muralla de tres clics, con torre redonda.' },
+  fortress: { label: 'Fortaleza', special: true, how: 'Una muralla de cuatro clics, con dos torres y puerta.' },
+  alcazar: { label: 'Alcázar', special: true, how: 'Una muralla de cinco clics: el alcázar del pueblo.' },
+};
+
+const ALL_ROLES = Object.keys(ROLES) as Role[];
+
+export const SPECIAL_ROLES: Role[] = ALL_ROLES.filter((r) => ROLES[r].special);
+
+export const SPECIAL_COUNT = SPECIAL_ROLES.length;
+
+const BASE_ROLE: Record<BlockKind, Role> = {
+  house: 'house',
+  tower: 'tower',
+  path: 'street',
+  tree: 'tree',
+  plaza: 'plaza',
+  dock: 'dock',
+  mill: 'windmill',
+  field: 'field',
+  garden: 'garden',
+  wall: 'wall',
+};
+
+type NeighbourCounts = Record<BlockKind, number>;
+
+const emptyCounts = (): NeighbourCounts => ({
+  house: 0, tower: 0, path: 0, tree: 0, plaza: 0, dock: 0, mill: 0, field: 0, garden: 0, wall: 0,
+});
+
+export interface Facts {
+  x: number;
+  z: number;
+  block: BlockKind;
+  /** How many times the tile was built up: 1, 2 or 3. */
+  level: number;
+  /** The tile itself is land (a path can also be laid over water). */
+  land: boolean;
+  /** Touches water. */
+  shore: boolean;
+  /** The tallest neighbour, and how many neighbours are three storeys or more. */
+  top: number;
+  tall: number;
+  /** The eight neighbours. */
+  around: NeighbourCounts;
+  /** The four neighbours. */
+  side: NeighbourCounts;
+}
+
+export interface Rule {
+  id: string;
+  role: Role;
+  when: (f: Facts) => boolean;
+}
+
+/** Ordered: the most specific rule wins. */
+export const RULES: Rule[] = [
+  // Gardens and walls: they grow on their own, click by click.
+  { id: 'R-G04', role: 'arboretum', when: (f) => f.block === 'garden' && f.level >= 5 },
+  { id: 'R-G03', role: 'maze', when: (f) => f.block === 'garden' && f.level >= 4 },
+  { id: 'R-G02', role: 'greenhouse', when: (f) => f.block === 'garden' && f.level >= 3 },
+  { id: 'R-G01', role: 'park', when: (f) => f.block === 'garden' && f.level >= 2 },
+  { id: 'R-W04', role: 'alcazar', when: (f) => f.block === 'wall' && f.level >= 5 },
+  { id: 'R-W03', role: 'fortress', when: (f) => f.block === 'wall' && f.level >= 4 },
+  { id: 'R-W02', role: 'bastion', when: (f) => f.block === 'wall' && f.level >= 3 },
+  { id: 'R-W01', role: 'rampart', when: (f) => f.block === 'wall' && f.level >= 2 },
+  // Towers next: the tallest things in town.
+  {
+    id: 'R-M04',
+    role: 'citadel',
+    when: (f) => f.block === 'tower' && f.side.tower >= 2 && (f.level >= 4 || f.top >= 4),
+  },
+  { id: 'R-M03', role: 'keep', when: (f) => f.block === 'tower' && f.side.tower >= 2 },
+  { id: 'R-L01', role: 'lighthouse', when: (f) => f.block === 'tower' && f.shore },
+  { id: 'R-T04', role: 'observatory', when: (f) => f.block === 'tower' && f.around.plaza >= 1 },
+  { id: 'R-T05', role: 'dovecote', when: (f) => f.block === 'tower' && f.around.tree >= 2 },
+  {
+    id: 'R-T03',
+    role: 'clocktower',
+    when: (f) => f.block === 'tower' && f.side.path >= 2 && f.around.house >= 1,
+  },
+  { id: 'R-T09', role: 'greattower', when: (f) => f.block === 'tower' && f.level >= 5 },
+  { id: 'R-T08', role: 'spire', when: (f) => f.block === 'tower' && f.level >= 4 && f.around.house >= 1 },
+  { id: 'R-T07', role: 'watchtower', when: (f) => f.block === 'tower' && f.level >= 3 },
+  { id: 'R-T02', role: 'belltower', when: (f) => f.block === 'tower' && f.level >= 2 },
+
+  // Houses that lean on a tower.
+  { id: 'R-C02', role: 'cathedral', when: (f) => f.block === 'house' && f.level >= 2 && f.side.tower >= 1 },
+  { id: 'R-H01', role: 'chapel', when: (f) => f.block === 'house' && f.side.tower >= 1 },
+
+  // Civic houses, around the square.
+  {
+    id: 'R-C01',
+    role: 'townhall',
+    when: (f) => f.block === 'house' && f.level >= 2 && f.around.plaza >= 1 && f.side.path >= 1,
+  },
+  { id: 'R-H06', role: 'inn', when: (f) => f.block === 'house' && f.side.path >= 2 && f.around.plaza >= 1 },
+  {
+    id: 'R-H22',
+    role: 'library',
+    when: (f) => f.block === 'house' && f.level >= 2 && f.around.plaza >= 1 && f.around.house >= 2,
+  },
+  {
+    id: 'R-H21',
+    role: 'schoolhouse',
+    when: (f) => f.block === 'house' && f.around.plaza >= 1 && f.around.house >= 2,
+  },
+
+  // Height alone: the tallest wins.
+  { id: 'R-C03', role: 'palace', when: (f) => f.block === 'house' && f.level >= 5 },
+  { id: 'R-H23', role: 'tenement', when: (f) => f.block === 'house' && f.level >= 4 },
+  { id: 'R-H09', role: 'manor', when: (f) => f.block === 'house' && f.level >= 3 },
+  { id: 'R-H10', role: 'townhouse', when: (f) => f.block === 'house' && f.level >= 2 },
+
+  // Water and work.
+  { id: 'R-H16', role: 'watermill', when: (f) => f.block === 'mill' && f.shore },
+  { id: 'R-H17', role: 'warehouse', when: (f) => f.block === 'house' && f.around.dock >= 2 },
+  { id: 'R-H05', role: 'boathouse', when: (f) => f.block === 'house' && f.around.dock >= 1 },
+  { id: 'R-H19', role: 'smithy', when: (f) => f.block === 'house' && f.around.field >= 1 && f.around.path >= 1 },
+  { id: 'R-H07', role: 'shop', when: (f) => f.block === 'house' && f.side.path >= 2 },
+  { id: 'R-S01', role: 'stall', when: (f) => f.block === 'house' && f.around.plaza >= 1 && f.around.path >= 1 },
+  { id: 'R-H18', role: 'barn', when: (f) => f.block === 'house' && f.around.field >= 1 },
+  { id: 'R-H15', role: 'cottage', when: (f) => f.block === 'house' && f.around.tree >= 2 },
+
+  // Ground.
+  { id: 'R-B01', role: 'bridge', when: (f) => f.block === 'path' && !f.land },
+  { id: 'R-D01', role: 'quay', when: (f) => f.block === 'path' && f.land && f.shore },
+  { id: 'R-M11', role: 'theatre', when: (f) => f.block === 'plaza' && f.side.plaza >= 3 && f.around.tower >= 1 },
+  { id: 'R-M12', role: 'bandstand', when: (f) => f.block === 'plaza' && f.around.tree >= 3 },
+  { id: 'R-F01', role: 'square', when: (f) => f.block === 'plaza' && f.side.plaza >= 4 },
+  { id: 'R-P02', role: 'greatoak', when: (f) => f.block === 'tree' && f.level >= 3 },
+  { id: 'R-P01', role: 'orchard', when: (f) => f.block === 'tree' && f.around.tree >= 4 },
+];
+
+/** Turns a block and its surroundings into what it becomes. */
+export function resolveCell(block: BlockKind, facts: Facts): Role {
+  for (const rule of RULES) {
+    if (rule.when(facts)) return rule.role;
+  }
+  return BASE_ROLE[block];
+}
+
+export interface Resolved {
+  role: Role;
+  block: BlockKind;
+  level: number;
+  /** What actually gets drawn: the level, plus one floor if a neighbour towers over it. */
+  storeys: number;
+  x: number;
+  z: number;
+  rule: string | null;
+}
+
+export function gatherFacts(
+  town: Town,
+  mask: boolean[][],
+  x: number,
+  z: number,
+  block: BlockKind,
+  level: number,
+): Facts {
+  const around = emptyCounts();
+  const side = emptyCounts();
+  const at = (dx: number, dz: number): BlockKind | null => {
+    const nx = x + dx;
+    const nz = z + dz;
+    if (nx < 0 || nz < 0 || nx >= GRID || nz >= GRID) return null;
+    return town.blocks.get(key(nx, nz))?.kind ?? null;
+  };
+  let top = 0;
+  let tall = 0;
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dz === 0) continue;
+      const kind = at(dx, dz);
+      if (kind) around[kind]++;
+      if (kind && (dx === 0 || dz === 0)) side[kind]++;
+      if (kind) {
+        const level = town.blocks.get(key(x + dx, z + dz))?.level ?? 1;
+        if (level > top) top = level;
+        if (level >= 3) tall++;
+      }
+    }
+  }
+  return {
+    x,
+    z,
+    block,
+    level,
+    top,
+    tall,
+    land: landAt(mask, x, z),
+    shore: isShore(mask, x, z),
+    around,
+    side,
+  };
+}
+
+/** Resolves every placed block of the town in one pass. */
+export function resolveTown(town: Town, mask: boolean[][]): Map<string, Resolved> {
+  const out = new Map<string, Resolved>();
+  for (const [k, placed] of town.blocks) {
+    const [x, z] = k.split(',').map(Number);
+    const facts = gatherFacts(town, mask, x, z, placed.kind, placed.level);
+    const rule = RULES.find((r) => r.when(facts)) ?? null;
+    // A house leans on its tall neighbour and gains a floor: nothing is broken,
+    // the town just grows into itself.
+    const storeys = Math.min(5, placed.level + (facts.top >= placed.level + 3 ? 1 : 0));
+    out.set(k, {
+      role: rule ? rule.role : BASE_ROLE[placed.kind],
+      block: placed.kind,
+      level: placed.level,
+      storeys,
+      x,
+      z,
+      rule: rule?.id ?? null,
+    });
+  }
+  return out;
+}
