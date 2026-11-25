@@ -15,8 +15,9 @@ export type Role =
   | 'street' | 'quay' | 'bridge'
   | 'plaza' | 'square' | 'theatre' | 'bandstand'
   | 'tree' | 'orchard'
-  | 'garden' | 'park' | 'greenhouse' | 'maze' | 'arboretum'
-  | 'wall' | 'rampart' | 'bastion' | 'fortress' | 'alcazar'
+  | 'garden' | 'park' | 'greenhouse' | 'maze' | 'arboretum' | 'parterre' | 'watergarden'
+  | 'wall' | 'rampart' | 'bastion' | 'fortress' | 'alcazar' | 'gatehouse'
+  | 'vineyard' | 'stable'
   | 'dock' | 'field';
 
 export interface RoleDef {
@@ -80,6 +81,11 @@ export const ROLES: Record<Role, RoleDef> = {
   bastion: { label: 'Torreón', special: true, how: 'Una muralla de tres clics, con torre redonda.' },
   fortress: { label: 'Fortaleza', special: true, how: 'Una muralla de cuatro clics, con dos torres y puerta.' },
   alcazar: { label: 'Alcázar', special: true, how: 'Una muralla de cinco clics: el alcázar del pueblo.' },
+  parterre: { label: 'Jardín de la plaza', special: true, how: 'Un jardín junto a la plaza, con fuente y setos recortados.' },
+  watergarden: { label: 'Jardín de agua', special: true, how: 'Un jardín en la orilla, con estanque, nenúfares y embarcadero.' },
+  gatehouse: { label: 'Puerta de la muralla', special: true, how: 'Una muralla de dos o tres clics junto a una torre.' },
+  vineyard: { label: 'Viñedo', special: true, how: 'Un campo junto a un jardín, con sus parras.' },
+  stable: { label: 'Cuadra', special: true, how: 'Una casa entre dos campos, con caballos.' },
 };
 
 const ALL_ROLES = Object.keys(ROLES) as Role[];
@@ -135,13 +141,16 @@ export interface Rule {
 /** Ordered: the most specific rule wins. */
 export const RULES: Rule[] = [
   // Gardens and walls: they grow on their own, click by click.
+  { id: 'R-G06', role: 'watergarden', when: (f) => f.block === 'garden' && f.shore && f.level <= 2 },
+  { id: 'R-G05', role: 'parterre', when: (f) => f.block === 'garden' && f.side.plaza >= 1 && f.level <= 2 },
   { id: 'R-G04', role: 'arboretum', when: (f) => f.block === 'garden' && f.level >= 5 },
   { id: 'R-G03', role: 'maze', when: (f) => f.block === 'garden' && f.level >= 4 },
   { id: 'R-G02', role: 'greenhouse', when: (f) => f.block === 'garden' && f.level >= 3 },
   { id: 'R-G01', role: 'park', when: (f) => f.block === 'garden' && f.level >= 2 },
   { id: 'R-W04', role: 'alcazar', when: (f) => f.block === 'wall' && f.level >= 5 },
   { id: 'R-W03', role: 'fortress', when: (f) => f.block === 'wall' && f.level >= 4 },
-  { id: 'R-W02', role: 'bastion', when: (f) => f.block === 'wall' && f.level >= 3 },
+  { id: 'R-W02', role: 'bastion', when: (f) => f.block === 'wall' && f.level >= 3 && f.around.tower === 0 },
+  { id: 'R-W05', role: 'gatehouse', when: (f) => f.block === 'wall' && f.around.tower >= 1 && f.level >= 2 && f.level <= 3 },
   { id: 'R-W01', role: 'rampart', when: (f) => f.block === 'wall' && f.level >= 2 },
   // Towers next: the tallest things in town.
   {
@@ -198,6 +207,7 @@ export const RULES: Rule[] = [
   { id: 'R-H19', role: 'smithy', when: (f) => f.block === 'house' && f.around.field >= 1 && f.around.path >= 1 },
   { id: 'R-H07', role: 'shop', when: (f) => f.block === 'house' && f.side.path >= 2 },
   { id: 'R-S01', role: 'stall', when: (f) => f.block === 'house' && f.around.plaza >= 1 && f.around.path >= 1 },
+  { id: 'R-H24', role: 'stable', when: (f) => f.block === 'house' && f.around.field >= 2 },
   { id: 'R-H18', role: 'barn', when: (f) => f.block === 'house' && f.around.field >= 1 },
   { id: 'R-H15', role: 'cottage', when: (f) => f.block === 'house' && f.around.tree >= 2 },
 
@@ -209,6 +219,7 @@ export const RULES: Rule[] = [
   { id: 'R-F01', role: 'square', when: (f) => f.block === 'plaza' && f.side.plaza >= 4 },
   { id: 'R-P02', role: 'greatoak', when: (f) => f.block === 'tree' && f.level >= 3 },
   { id: 'R-P01', role: 'orchard', when: (f) => f.block === 'tree' && f.around.tree >= 4 },
+  { id: 'R-F02', role: 'vineyard', when: (f) => f.block === 'field' && f.around.garden >= 1 },
 ];
 
 /** Turns a block and its surroundings into what it becomes. */

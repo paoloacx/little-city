@@ -47,6 +47,26 @@ interface Cat {
   phase: number;
 }
 
+interface Dog {
+  group: THREE.Group;
+  tail: THREE.Object3D;
+  from: THREE.Vector3;
+  to: THREE.Vector3;
+  t: number;
+  speed: number;
+  wait: number;
+  phase: number;
+}
+
+interface Balloon {
+  group: THREE.Group;
+  radius: number;
+  angle: number;
+  speed: number;
+  height: number;
+  phase: number;
+}
+
 interface Pigeon {
   group: THREE.Group;
   baseY: number;
@@ -90,6 +110,8 @@ export class Life {
   private readonly walkers: Walker[] = [];
   private readonly idlers: Idler[] = [];
   private readonly cats: Cat[] = [];
+  private readonly dogs: Dog[] = [];
+  private balloon: Balloon | null = null;
   private readonly pigeons: Pigeon[] = [];
   private readonly boats: Boat[] = [];
   private readonly gulls: Gull[] = [];
@@ -182,6 +204,40 @@ export class Life {
         phase: random() * 10,
       });
     }
+    // Dogs: one per few streets, nosing about faster than the cats.
+    for (let i = 0; i < Math.min(3, Math.floor(walkables.length / 10)); i++) {
+      const spot = walkables[Math.floor(random() * walkables.length)];
+      const dog = this.dog(random);
+      if (!dog) continue;
+      const origin = new THREE.Vector3(worldX(spot.x), 0, worldZ(spot.z));
+      dog.group.position.copy(origin);
+      this.group.add(dog.group);
+      this.dogs.push({
+        group: dog.group,
+        tail: dog.tail,
+        from: origin.clone(),
+        to: origin.clone(),
+        t: 1,
+        speed: 0.3 + random() * 0.25,
+        wait: random() * 2,
+        phase: random() * 10,
+      });
+    }
+
+    // One balloon over the island: the postcard of the whole town.
+    const balloon = this.hotAirBalloon(random);
+    if (balloon) {
+      this.group.add(balloon.group);
+      this.balloon = {
+        group: balloon.group,
+        radius: 4.6 + random() * 2.2,
+        angle: random() * Math.PI * 2,
+        speed: 0.028 + random() * 0.016,
+        height: 2.7 + random() * 0.6,
+        phase: random() * 10,
+      };
+    }
+
     for (let i = 0; i < Math.min(6, plazas.length); i++) {
       const spot = plazas[Math.floor(random() * plazas.length)];
       const pigeon = this.pigeon(random);
@@ -315,6 +371,38 @@ export class Life {
         cat.group.position.y = Math.abs(Math.sin((time + cat.phase) * 6)) * 0.008;
         cat.tail.rotation.z = Math.sin((time + cat.phase) * 3) * 0.45;
       }
+    }
+
+    for (const dog of this.dogs) {
+      if (dog.wait > 0) {
+        dog.wait -= dt;
+        dog.tail.rotation.z = Math.sin((time + dog.phase) * 8) * 0.35;
+      } else {
+        dog.t += dt * dog.speed;
+        if (dog.t >= 1) {
+          dog.from.copy(dog.to);
+          dog.to.set(dog.from.x + (Math.random() - 0.5) * 2.4, 0, dog.from.z + (Math.random() - 0.5) * 2.4);
+          dog.t = 0;
+          dog.wait = 0.5 + Math.random() * 2;
+        }
+        const x = dog.from.x + (dog.to.x - dog.from.x) * dog.t;
+        const z = dog.from.z + (dog.to.z - dog.from.z) * dog.t;
+        dog.group.position.set(x, Math.abs(Math.sin((time + dog.phase) * 8)) * 0.012, z);
+        if (dog.to.x !== dog.from.x || dog.to.z !== dog.from.z) {
+          dog.group.rotation.y = Math.atan2(dog.to.x - dog.from.x, dog.to.z - dog.from.z);
+        }
+        dog.tail.rotation.z = Math.sin((time + dog.phase) * 14) * 0.5;
+      }
+    }
+
+    if (this.balloon) {
+      const b = this.balloon;
+      const angle = b.angle + time * b.speed;
+      const x = Math.cos(angle) * b.radius;
+      const z = Math.sin(angle) * b.radius;
+      b.group.position.set(x, b.height + Math.sin(time * 0.5 + b.phase) * 0.12, z);
+      b.group.rotation.y = -angle;
+      b.group.rotation.z = Math.sin(time * 0.4 + b.phase) * 0.035;
     }
 
     for (const pigeon of this.pigeons) {
@@ -553,6 +641,61 @@ export class Life {
     return { group: this.makeBoat(geometry, null, wakes), wakes };
   }
 
+  private dog(random: () => number): { group: THREE.Group; tail: THREE.Object3D } | null {
+    const gb = new GeoBuilder();
+    const coats = [0xb5874a, 0x8a6a4f, 0x3a2f2a, 0xe0d3bb, 0xc4633f];
+    const coat = coats[Math.floor(random() * coats.length)];
+    gb.add(blob(), coat, [0, 0.075, 0], [0, 0, 0], [0.19, 0.1, 0.1]);
+    gb.add(blob(), coat, [0.11, 0.13, 0], [0, 0, 0], [0.095, 0.085, 0.08]);
+    gb.add(cube(), coat, [0.185, 0.115, 0], [0, 0, 0], [0.07, 0.05, 0.05]);
+    gb.add(cone(), coat, [0.1, 0.175, 0.04], [0.2, 0, 0.5], [0.045, 0.05, 0.03]);
+    gb.add(cone(), coat, [0.1, 0.175, -0.04], [-0.2, 0, 0.5], [0.045, 0.05, 0.03]);
+    gb.add(cube(), 0x3a2f2a, [0.215, 0.13, 0], [0, 0, 0], [0.022, 0.02, 0.022]);
+    for (const [x, z] of [[-0.06, -0.035], [0.05, -0.035], [-0.06, 0.035], [0.05, 0.035]] as const) {
+      gb.add(post(), coat, [x, 0.033, z], [0, 0, 0], [0.03, 0.066, 0.03]);
+    }
+    const geometry = gb.build();
+    if (!geometry) return null;
+    const group = new THREE.Group();
+    group.add(new THREE.Mesh(geometry, this.surface));
+    const tailGeometry = new GeoBuilder()
+      .add(post(), coat, [0, 0.045, 0], [0, 0, 0], [0.026, 0.1, 0.026])
+      .build();
+    if (!tailGeometry) return null;
+    const tail = new THREE.Group();
+    tail.position.set(-0.1, 0.1, 0);
+    tail.rotation.z = 0.9;
+    tail.add(new THREE.Mesh(tailGeometry, this.surface));
+    group.add(tail);
+    group.scale.setScalar(0.9 + random() * 0.25);
+    return { group, tail };
+  }
+
+  private hotAirBalloon(random: () => number): { group: THREE.Group } | null {
+    const group = new THREE.Group();
+    const envelope = new THREE.Group();
+    const gb = new GeoBuilder();
+    const panels = [0xc4633f, 0xf6edda, 0x6f9d8c, 0xf6edda];
+    for (let i = 0; i < 4; i++) {
+      const angle = (i * Math.PI) / 2;
+      gb.add(blob(), panels[i], [Math.cos(angle) * 0.12, 0, Math.sin(angle) * 0.12], [0, 0, 0], [0.32, 0.42, 0.3]);
+    }
+    gb.add(blob(), panels[0], [0, 0.2, 0], [0, 0, 0], [0.34, 0.3, 0.32]);
+    // Ropes and basket.
+    for (const [x, z] of [[-0.07, -0.07], [0.07, -0.07], [-0.07, 0.07], [0.07, 0.07]] as const) {
+      gb.add(cube(), 0x3a2f2a, [x * 1.3, -0.42, z * 1.3], [0, 0, 0], [0.012, 0.34, 0.012]);
+    }
+    gb.add(cube(), 0x9c7a58, [0, -0.6, 0], [0, 0, 0], [0.17, 0.13, 0.17]);
+    gb.add(cube(), 0x7a5a44, [0, -0.54, 0], [0, 0, 0], [0.19, 0.025, 0.19]);
+    gb.add(cube(), 0x3a2f2a, [0, -0.59, 0], [0, 0, 0], [0.15, 0.02, 0.15]);
+    const geometry = gb.build();
+    if (!geometry) return null;
+    envelope.add(new THREE.Mesh(geometry, this.surface));
+    group.add(envelope);
+    group.scale.setScalar(0.9 + random() * 0.2);
+    return { group };
+  }
+
   private cat(random: () => number): { group: THREE.Group; tail: THREE.Object3D } | null {
     const gb = new GeoBuilder();
     const coat = [0x3a2f2a, 0xc9bda6, 0xb5874a, 0x6b6560][Math.floor(random() * 4)];
@@ -639,6 +782,8 @@ export class Life {
     this.walkers.length = 0;
     this.idlers.length = 0;
     this.cats.length = 0;
+    this.dogs.length = 0;
+    this.balloon = null;
     this.pigeons.length = 0;
     this.boats.length = 0;
     this.gulls.length = 0;

@@ -318,5 +318,23 @@ export function growTown(seed: number): Town {
     blocks.set(key(keepSpot[0], keepSpot[1]), { kind: 'wall', level: 4 });
   }
 
+  // 15. A vineyard by the garden, a gatehouse by a tower, a stable by two fields.
+  const vineSpot = pick(land.filter(([x, z]) => free(x, z) && neighbours(x, z, 'garden') >= 1));
+  if (vineSpot) {
+    blocks.set(key(vineSpot[0], vineSpot[1]), { kind: 'field', level: 1 });
+  }
+  const gateSpot = land.find(([x, z]) => {
+    const placed = blocks.get(key(x, z));
+    return placed?.kind === 'wall' && neighbours(x, z, 'tower') >= 1;
+  });
+  if (gateSpot) {
+    const placed = blocks.get(key(gateSpot[0], gateSpot[1]));
+    if (placed) placed.level = Math.max(placed.level, 2);
+  }
+  const stableSpot = pick(land.filter(([x, z]) => free(x, z) && neighbours(x, z, 'field') >= 2));
+  if (stableSpot) {
+    blocks.set(key(stableSpot[0], stableSpot[1]), { kind: 'house', level: 1 });
+  }
+
   return { seed, blocks };
 }

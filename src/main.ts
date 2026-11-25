@@ -1,11 +1,13 @@
 import './style.css';
 
-import { BLOCK_DEFS, BlockKind, MAX_LEVEL, Town, key, landAt, loadSaved, saveTown } from './grid';
+import { BLOCK_DEFS, BlockKind, MAX_LEVEL, Town, UNLOCK_AT, key, landAt, loadSaved, saveTown } from './grid';
 import { ROLES, SPECIAL_COUNT } from './rules';
 import { growTown } from './grow';
 import { World } from './scene';
 import { encodeTown, shareUrl, townFromHash } from './share';
 import { openGuide } from './guide';
+import { introSeen, openIntro } from './intro';
+import { loadSlots, openSaves, persistSlots, type SlotData } from './saves';
 import { Ambience } from './audio';
 
 const SOUND_KEY = 'ciudad-pequena.sound';
@@ -24,6 +26,8 @@ const postcardEl = document.getElementById('postcard') as HTMLButtonElement;
 const guideEl = document.getElementById('guide') as HTMLButtonElement;
 const soundEl = document.getElementById('sound') as HTMLButtonElement;
 const cycleEl = document.getElementById('cycle') as HTMLButtonElement;
+const undoEl = document.getElementById('undo') as HTMLButtonElement;
+const brushEl = document.getElementById('brush') as HTMLButtonElement;
 
 const world = new World(canvas);
 const ambience = new Ambience();
@@ -39,6 +43,17 @@ let recent: string[] = [];
 const clickEl = document.getElementById('click-count') as HTMLElement;
 const clickRow = document.getElementById('click-row') as HTMLElement;
 let clicks = 0;
+
+/** Snapshots let the player walk back out of any mistake, Ctrl+Z at a time. */
+interface Snapshot {
+  seed: number;
+  clicks: number;
+  blocks: [string, BlockKind, number][];
+}
+const undoStack: Snapshot[] = [];
+const HISTORY_MAX = 40;
+let brush = false;
+let lastPaint: { x: number; z: number } | null = null;
 
 const shared = townFromHash();
 const stored = shared ? null : loadSaved();
@@ -62,8 +77,85 @@ boot();
 function boot(): void {
   resolve(false);
   syncPanel();
+  updateLocks();
   clickEl.textContent = String(clicks);
   save();
+}
+
+/* ------------------------------------------------------- undo and unlocking */
+
+function snapshot(): Snapshot {
+  return {
+    seed: town.seed,
+    clicks,
+    blocks: [...town.blocks].map(([k, placed]) => [k, placed.kind, placed.level] as [string, BlockKind, number]),
+  };
+}
+
+function pushHistory(): void {
+  undoStack.push(snapshot());
+  if (undoStack.length > HISTORY_MAX) undoStack.shift();
+  undoEl.disabled = false;
+}
+
+function restore(snap: Snapshot): void {
+  if (town.seed !== snap.seed) {
+    town = { seed: snap.seed, blocks: new Map() };
+    world.setSeed(snap.seed);
+  }
+  town = {
+    seed: snap.seed,
+    blocks: new Map(snap.blocks.map(([k, kind, level]) => [k, { kind, level }])),
+  };
+  clicks = snap.clicks;
+  clickEl.textContent = String(clicks);
+}
+
+function undo(): void {
+  const snap = undoStack.pop();
+  if (!snap) return;
+  restore(snap);
+  resolve(false);
+  syncPanel();
+  updateLocks();
+  save();
+  undoEl.disabled = undoStack.length === 0;
+  lastPaint = null;
+  updateGhost(lastPointer.x, lastPointer.y);
+  toast('Deshecho');
+}
+
+function unlockNeed(kind: BlockKind): number {
+  return UNLOCK_AT[kind] ?? 0;
+}
+
+function isLocked(kind: BlockKind): boolean {
+  return found.size < unlockNeed(kind);
+}
+
+function updateLocks(): void {
+  for (const button of paletteEl.querySelectorAll('button')) {
+    const kind = button.dataset.tool as BlockKind | 'erase';
+    if (kind === 'erase') continue;
+    const locked = isLocked(kind);
+    button.classList.toggle('locked', locked);
+    button.setAttribute('aria-disabled', String(locked));
+    const badge = button.querySelector('.lc-lock');
+    if (badge) badge.textContent = String(unlockNeed(kind));
+  }
+}
+
+/** Tells the player when a new block just became available. */
+function announceUnlocks(before: Set<BlockKind>): void {
+  const fresh = BLOCK_DEFS.map((d) => d.kind).filter((kind) => !before.has(kind) && !isLocked(kind));
+  if (fresh.length === 0) return;
+  const labels = fresh.map((kind) => BLOCK_DEFS.find((d) => d.kind === kind)?.label ?? kind);
+  updateLocks();
+  toast(`Desbloqueado: ${labels.join(' · ')}`);
+}
+
+function unlockedNow(): Set<BlockKind> {
+  return new Set(BLOCK_DEFS.map((d) => d.kind).filter((kind) => !isLocked(kind)));
 }
 
 /** Rebuilds the world and collects any discovery the town now holds. */
@@ -99,8 +191,10 @@ function syncPanel(): void {
 }
 
 function apply(): void {
+  const before = unlockedNow();
   resolve(true);
   syncPanel();
+  announceUnlocks(before);
   save();
 }
 
@@ -132,10 +226,16 @@ const WATER_TILES: ReadonlySet<Tool> = new Set<Tool>(['path', 'dock']);
 function place(x: number, z: number): void {
   const land = landAt(world.islandMask, x, z);
   if (!land && !WATER_TILES.has(tool)) return;
+  if (tool !== 'erase' && isLocked(tool)) {
+    toast(`Se desbloquea con ${unlockNeed(tool)} hallazgos: llevas ${found.size}`);
+    return;
+  }
   const k = key(x, z);
 
   if (tool === 'erase') {
-    if (!town.blocks.delete(k)) return;
+    if (!town.blocks.has(k)) return;
+    pushHistory();
+    town.blocks.delete(k);
     clicks += 1;
     syncClicks();
     ambience.tick();
@@ -151,10 +251,65 @@ function place(x: number, z: number): void {
       toast('Ya está al máximo: cinco alturas');
       return;
     }
+    pushHistory();
     current.level += 1;
   } else {
+    pushHistory();
     town.blocks.set(k, { kind: tool, level: 1 });
   }
+  clicks += 1;
+  syncClicks();
+  ambience.tick();
+  apply();
+}
+
+/**
+ * One stroke of the brush: only the first pass over a tile counts, so holding
+ * the button down never builds a tower by accident.
+ */
+function paintAt(x: number, z: number): void {
+  if (lastPaint && lastPaint.x === x && lastPaint.z === z) return;
+  lastPaint = { x, z };
+  const land = landAt(world.islandMask, x, z);
+  if (!land && !WATER_TILES.has(tool)) return;
+  if (tool !== 'erase' && isLocked(tool)) return;
+  const k = key(x, z);
+  const current = town.blocks.get(k);
+  if (tool === 'erase') {
+    if (!current) return;
+    pushHistory();
+    town.blocks.delete(k);
+  } else {
+    if (current && current.kind === tool) return;
+    pushHistory();
+    town.blocks.set(k, { kind: tool, level: 1 });
+  }
+  clicks += 1;
+  syncClicks();
+  ambience.tick();
+  apply();
+}
+
+/** Right click: straight to five storeys, for players in a hurry. */
+function placeMax(x: number, z: number): void {
+  const land = landAt(world.islandMask, x, z);
+  if (!land && !WATER_TILES.has(tool)) return;
+  if (tool === 'erase') {
+    place(x, z);
+    return;
+  }
+  if (isLocked(tool)) {
+    toast(`Se desbloquea con ${unlockNeed(tool)} hallazgos: llevas ${found.size}`);
+    return;
+  }
+  const k = key(x, z);
+  const current = town.blocks.get(k);
+  if (current && current.kind === tool && current.level >= MAX_LEVEL) {
+    toast('Ya está al máximo: cinco alturas');
+    return;
+  }
+  pushHistory();
+  town.blocks.set(k, { kind: tool, level: MAX_LEVEL });
   clicks += 1;
   syncClicks();
   ambience.tick();
@@ -199,12 +354,16 @@ const pinchSpread = (): number => {
   return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
 };
 
+canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+
 canvas.addEventListener('pointerdown', (event) => {
+  if (event.button === 2) return;
   canvas.setPointerCapture(event.pointerId);
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
   if (pointers.size === 1) {
     lastPointer = { x: event.clientX, y: event.clientY };
     travel = 0;
+    lastPaint = null;
   } else {
     pinch = pinchSpread();
   }
@@ -230,16 +389,28 @@ canvas.addEventListener('pointermove', (event) => {
   lastPointer = { x: event.clientX, y: event.clientY };
   travel += Math.abs(dx) + Math.abs(dy);
   if (travel > 5) {
-    world.rotateBy(dx, dy);
+    if (brush && !event.shiftKey) {
+      const hit = world.pick(event.clientX, event.clientY);
+      if (hit) paintAt(hit.x, hit.z);
+    } else {
+      world.rotateBy(dx, dy);
+    }
     world.setGhost(null, null);
   }
 });
 
 const release = (event: PointerEvent, act: boolean): void => {
+  if (event.button === 2) {
+    const hit = world.pick(event.clientX, event.clientY);
+    if (hit) placeMax(hit.x, hit.z);
+    updateGhost(event.clientX, event.clientY);
+    return;
+  }
   pointers.delete(event.pointerId);
   if (pointers.size > 0) return;
   canvas.classList.remove('dragging');
   pinch = 0;
+  lastPaint = null;
   if (!act) return;
   if (travel > 5) return;
   const hit = world.pick(event.clientX, event.clientY);
@@ -251,7 +422,9 @@ canvas.addEventListener('pointerup', (event) => release(event, true));
 canvas.addEventListener('pointercancel', (event) => release(event, false));
 canvas.addEventListener('pointerleave', () => {
   world.setGhost(null, null);
-  hintEl.textContent = 'Arrastra para girar · rueda para acercar · toca para colocar';
+  hintEl.textContent = brush
+    ? 'Pincel: arrastra para pintar · Shift para girar · rueda para acercar'
+    : 'Arrastra para girar · rueda para acercar · toca para colocar';
 });
 
 canvas.addEventListener(
@@ -264,8 +437,17 @@ canvas.addEventListener(
 );
 
 window.addEventListener('keydown', (event) => {
+  if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) {
+    event.preventDefault();
+    undo();
+    return;
+  }
   if (event.key === 'e' || event.key === 'E' || event.key === 'Backspace') {
     select('erase');
+    return;
+  }
+  if (event.key === 'b' || event.key === 'B') {
+    setBrush(!brush);
     return;
   }
   // 1..9 and then 0 for the tenth block.
@@ -298,8 +480,16 @@ function renderPalette(): void {
     swatch.style.setProperty('--swatch', def.swatch);
     const label = document.createElement('span');
     label.textContent = def.label;
-    button.append(swatch, label);
-    button.addEventListener('click', () => select(def.kind));
+    const lock = document.createElement('span');
+    lock.className = 'lc-lock';
+    button.append(swatch, label, lock);
+    button.addEventListener('click', () => {
+      if (isLocked(def.kind)) {
+        toast(`Se desbloquea con ${unlockNeed(def.kind)} hallazgos: llevas ${found.size}`);
+        return;
+      }
+      select(def.kind);
+    });
     frag.append(button);
   }
 
@@ -320,7 +510,20 @@ function renderPalette(): void {
   paletteEl.append(frag);
 }
 
+function setBrush(on: boolean): void {
+  brush = on;
+  brushEl.textContent = on ? 'Pincel: sí' : 'Pincel: no';
+  brushEl.setAttribute('aria-pressed', String(on));
+  hintEl.textContent = on
+    ? 'Pincel: arrastra para pintar · Shift para girar · botón derecho: cinco alturas'
+    : 'Arrastra para girar · clic derecho: cinco alturas · rueda para acercar';
+}
+
+brushEl.addEventListener('click', () => setBrush(!brush));
+undoEl.addEventListener('click', () => undo());
+
 growEl.addEventListener('click', () => {
+  pushHistory();
   town = growTown((Math.random() * 1e9) | 0);
   clicks = 0;
   world.setSeed(town.seed);
@@ -328,16 +531,20 @@ growEl.addEventListener('click', () => {
   recent = [];
   resolve(true);
   syncPanel();
+  updateLocks();
   save();
+  toast(`Isla de ${world.biomeName}: pueblo nuevo`);
 });
 
 clearEl.addEventListener('click', () => {
+  pushHistory();
   town = { seed: town.seed, blocks: new Map() };
   clicks = 0;
   found.clear();
   recent = [];
   resolve(false);
   syncPanel();
+  updateLocks();
   save();
 });
 
@@ -390,6 +597,71 @@ function setCycle(on: boolean): void {
 cycleEl.addEventListener('click', () => setCycle(cycleEl.getAttribute('aria-pressed') !== 'true'));
 
 renderPalette();
+
+/* ------------------------------------------------------------ photo mode */
+
+const photoEl = document.getElementById('photo') as HTMLButtonElement;
+const savesEl = document.getElementById('saves') as HTMLButtonElement;
+
+/* ------------------------------------------------------------- saved towns */
+
+function currentSlot(): SlotData {
+  return {
+    seed: town.seed,
+    blocks: [...town.blocks].map(([k, placed]) => {
+      const [x, z] = k.split(',').map(Number);
+      return [x, z, placed.kind, placed.level] as [number, number, BlockKind, number];
+    }),
+    found: [...found],
+    clicks,
+    savedAt: Date.now(),
+  };
+}
+
+function loadSlot(data: SlotData): void {
+  pushHistory();
+  town = {
+    seed: data.seed,
+    blocks: new Map(data.blocks.map(([x, z, kind, level]) => [key(x, z), { kind, level }])),
+  };
+  found.clear();
+  for (const role of data.found) found.add(role);
+  clicks = data.clicks;
+  world.setSeed(town.seed);
+  resolve(false);
+  syncPanel();
+  syncClicks();
+  updateLocks();
+  save();
+  toast(`Pueblo cargado: ${world.biomeName}`);
+}
+
+savesEl.addEventListener('click', () =>
+  openSaves({
+    slots: loadSlots(),
+    current: currentSlot,
+    label: () => `Isla de ${world.biomeName}`,
+    onLoad: loadSlot,
+    onChange: persistSlots,
+  }),
+);
+
+function setPhoto(on: boolean): void {
+  document.body.classList.toggle('lc-photo', on);
+  photoEl.textContent = on ? 'Salir' : 'Foto';
+  photoEl.setAttribute('aria-pressed', String(on));
+}
+
+photoEl.addEventListener('click', () => setPhoto(!document.body.classList.contains('lc-photo')));
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && document.body.classList.contains('lc-photo')) setPhoto(false);
+});
+
+/* First visit: the four things worth knowing, and then out of the way. */
+if (!introSeen()) {
+  openIntro(() => updateGhost(lastPointer.x, lastPointer.y));
+}
+
 
 /* Sound is off by default: it waits for the listener to ask for it. */
 if (localStorage.getItem(SOUND_KEY) === 'on') {

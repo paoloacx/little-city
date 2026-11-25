@@ -872,7 +872,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     const bodyH = floors * FLOOR;
     const roofY = base + bodyH;
     // Terrace, steps, gateposts, hedges and the gravel path.
-    gb.add(cube(), C.stone, [0, base / 2, 0], [0, 0, 0], [0.9, base, 0.8]);
+    gb.add(cube(), C.stone, [0, base / 2, 0], [0, 0, 0], [0.96, base, 0.86]);
     for (let i = 0; i < 3; i++) {
       gb.add(cube(), i % 2 === 0 ? C.stone : C.stoneLight, [0, base + 0.015 + i * 0.02, 0.37 - i * 0.05], [0, 0, 0], [
         0.3 - i * 0.03, 0.04, 0.1,
@@ -880,33 +880,33 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     }
     gb.add(quad(), C.path, [0, base + 0.004, 0.45], [0, 0, 0], [0.15, 1, 0.1]);
     for (const sx of [-1, 1]) {
-      gb.add(cube(), C.stoneDark, [sx * 0.15, base + 0.08, 0.45], [0, 0, 0], [0.06, 0.16, 0.06]);
-      gb.add(blob(), C.leafDeep, [sx * 0.15, base + 0.18, 0.45], [0, rnd() * 3, 0], [0.11, 0.08, 0.11]);
-      gb.add(blob(), C.leafDeep, [sx * 0.3, base + 0.09, 0.33], [0, rnd() * 3, 0], [0.2, 0.14, 0.12]);
+      gb.add(cube(), C.stoneDark, [sx * 0.17, base + 0.08, 0.45], [0, 0, 0], [0.06, 0.16, 0.06]);
+      gb.add(blob(), C.leafDeep, [sx * 0.17, base + 0.18, 0.45], [0, rnd() * 3, 0], [0.11, 0.08, 0.11]);
+      gb.add(blob(), C.leafDeep, [sx * 0.36, base + 0.09, 0.33], [0, rnd() * 3, 0], [0.2, 0.14, 0.12]);
     }
     // The main block, with a stone band at every floor.
-    gb.add(cube(), C.stoneLight, [0, base + bodyH / 2 - 0.02, -0.02], [0, 0, 0], [0.64, bodyH, 0.44]);
+    gb.add(cube(), C.stoneLight, [0, base + bodyH / 2 - 0.02, -0.02], [0, 0, 0], [0.82, bodyH, 0.46]);
     for (let i = 1; i <= floors; i++) {
-      gb.add(cube(), C.stone, [0, base + i * FLOOR - 0.014, -0.02], [0, 0, 0], [0.68, 0.024, 0.48]);
+      gb.add(cube(), C.stone, [0, base + i * FLOOR - 0.014, -0.02], [0, 0, 0], [0.86, 0.024, 0.5]);
     }
     // Quoins down both corners.
     for (let i = 0; i < floors * 2; i++) {
       for (const sx of [-1, 1]) {
-        gb.add(cube(), i % 2 ? C.stone : C.stoneDark, [sx * 0.3, base + 0.05 + i * 0.1, 0.19], [0, 0, 0], [0.05, 0.08, 0.03]);
+        gb.add(cube(), i % 2 ? C.stone : C.stoneDark, [sx * 0.39, base + 0.05 + i * 0.1, 0.19], [0, 0, 0], [0.05, 0.08, 0.03]);
       }
     }
     // Four tall windows a floor; the first floor gets its balcony.
     for (let i = 1; i <= floors; i++) {
       const y = base + i * FLOOR - 0.1;
       for (const sx of [-1, 1]) {
-        for (const x of [0.1, 0.21]) {
-          windowBox(gb, sx * x, y, 0.205, 0.07, 0.14, i > 1 ? rnd() < 0.5 : true);
-          gb.add(cube(), C.stone, [sx * x, y - 0.086, 0.212], [0, 0, 0], [0.1, 0.02, 0.04]);
+        for (const x of [0.13, 0.27]) {
+          windowBox(gb, sx * x, y, 0.215, 0.075, 0.14, i > 1 ? rnd() < 0.5 : true);
+          gb.add(cube(), C.stone, [sx * x, y - 0.086, 0.222], [0, 0, 0], [0.1, 0.02, 0.04]);
           if (i === 1) {
-            gb.add(cube(), C.stoneDark, [sx * x, y - 0.115, 0.24], [0, 0, 0], [0.12, 0.02, 0.07]);
-            gb.add(cube(), C.iron, [sx * x, y - 0.075, 0.27], [0, 0, 0], [0.12, 0.06, 0.008]);
+            gb.add(cube(), C.stoneDark, [sx * x, y - 0.115, 0.25], [0, 0, 0], [0.12, 0.02, 0.07]);
+            gb.add(cube(), C.iron, [sx * x, y - 0.075, 0.282], [0, 0, 0], [0.12, 0.06, 0.008]);
             for (const side of [-1, 0, 1]) {
-              gb.add(cube(), C.iron, [sx * x + side * 0.055, y - 0.09, 0.27], [0, 0, 0], [0.008, 0.06, 0.008]);
+              gb.add(cube(), C.iron, [sx * x + side * 0.055, y - 0.09, 0.282], [0, 0, 0], [0.008, 0.06, 0.008]);
             }
           }
         }
@@ -915,45 +915,45 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     // The pavilion: one more floor than the roof, with the portico at the door.
     const pavH = bodyH + 0.28;
     const pavTop = base + pavH;
-    gb.add(cube(), C.stoneLight, [0, base + pavH / 2, 0.2], [0, 0, 0], [0.24, pavH, 0.16]);
+    gb.add(cube(), C.stoneLight, [0, base + pavH / 2, 0.2], [0, 0, 0], [0.3, pavH, 0.18]);
     for (let i = 1; i <= floors + 1; i++) {
-      gb.add(cube(), C.stone, [0, base + i * FLOOR - 0.014, 0.2], [0, 0, 0], [0.28, 0.024, 0.2]);
+      gb.add(cube(), C.stone, [0, base + i * FLOOR - 0.014, 0.2], [0, 0, 0], [0.34, 0.024, 0.22]);
     }
-    gb.add(cube(), C.door, [0, base + 0.15, 0.285], [0, 0, 0], [0.14, 0.28, 0.03]);
-    for (const x of [-0.085, 0.085]) {
-      gb.add(post(), C.stoneLight, [x, base + 0.14, 0.3], [0, 0, 0], [0.045, 0.28, 0.045]);
+    gb.add(cube(), C.door, [0, base + 0.15, 0.295], [0, 0, 0], [0.14, 0.28, 0.03]);
+    for (const x of [-0.1, 0.1]) {
+      gb.add(post(), C.stoneLight, [x, base + 0.14, 0.31], [0, 0, 0], [0.045, 0.28, 0.045]);
     }
-    gb.add(cube(), C.stone, [0, base + 0.29, 0.3], [0, 0, 0], [0.26, 0.04, 0.09]);
-    gb.add(cube(), C.iron, [0, base + 0.34, 0.34], [0, 0, 0], [0.22, 0.05, 0.01]);
+    gb.add(cube(), C.stone, [0, base + 0.29, 0.31], [0, 0, 0], [0.32, 0.04, 0.1]);
+    gb.add(cube(), C.iron, [0, base + 0.34, 0.35], [0, 0, 0], [0.28, 0.05, 0.01]);
     gb.light(0, base + 0.32, 0.36, 1.4);
     for (let i = 1; i <= floors; i++) {
-      windowBox(gb, 0, base + i * FLOOR - 0.09, 0.285, 0.06, 0.13, i > 1);
+      windowBox(gb, 0, base + i * FLOOR - 0.09, 0.295, 0.07, 0.13, i > 1);
     }
     // Slate roofs either side, with dormers and chimneys.
     for (const sx of [-1, 1]) {
-      roofAt(gb, sx * 0.18, -0.02, 0.14, 0.24, 0.16, C.slate, roofY);
+      roofAt(gb, sx * 0.23, -0.02, 0.17, 0.25, 0.16, C.slate, roofY);
       for (let i = 0; i < 2; i++) {
-        const x = sx * (0.09 + i * 0.13);
+        const x = sx * (0.11 + i * 0.15);
         gb.add(cube(), C.wall, [x, roofY + 0.06, 0.13], [0, 0, 0], [0.1, 0.12, 0.1]);
         roofAt(gb, x, 0.13, 0.07, 0.07, 0.08, C.slateDeep, roofY + 0.12);
         gb.add(cube(), C.glass, [x, roofY + 0.07, 0.185], [0, 0, 0], [0.05, 0.06, 0.02]);
       }
-      chimney(gb, sx * 0.29, roofY + 0.07, -0.16);
+      chimney(gb, sx * 0.35, roofY + 0.07, -0.18);
     }
     // Drum, copper dome, lantern, finial and the flag.
-    gb.add(cube(), C.stone, [0, pavTop + 0.02, 0.2], [0, 0, 0], [0.32, 0.05, 0.24]);
-    gb.add(plate(), C.stoneLight, [0, pavTop + 0.1, 0.2], [0, 0, 0], [0.24, 0.12, 0.2]);
-    gb.add(cube(), C.glass, [0, pavTop + 0.1, 0.305], [0, 0, 0], [0.05, 0.07, 0.02]);
-    gb.add(cube(), C.glass, [0, pavTop + 0.1, 0.095], [0, 0, 0], [0.05, 0.07, 0.02]);
+    gb.add(cube(), C.stone, [0, pavTop + 0.02, 0.2], [0, 0, 0], [0.38, 0.05, 0.26]);
+    gb.add(plate(), C.stoneLight, [0, pavTop + 0.1, 0.2], [0, 0, 0], [0.28, 0.12, 0.22]);
+    gb.add(cube(), C.glass, [0, pavTop + 0.1, 0.315], [0, 0, 0], [0.05, 0.07, 0.02]);
+    gb.add(cube(), C.glass, [0, pavTop + 0.1, 0.085], [0, 0, 0], [0.05, 0.07, 0.02]);
     for (const sx of [-1, 1]) {
-      gb.add(cube(), C.glass, [sx * 0.125, pavTop + 0.1, 0.2], [0, 0, 0], [0.02, 0.07, 0.05]);
+      gb.add(cube(), C.glass, [sx * 0.145, pavTop + 0.1, 0.2], [0, 0, 0], [0.02, 0.07, 0.05]);
     }
-    gb.add(dome(), C.copper, [0, pavTop + 0.16, 0.2], [0, 0, 0], [0.34, 0.28, 0.3]);
-    gb.add(cube(), C.stoneLight, [0, pavTop + 0.32, 0.2], [0, 0, 0], [0.06, 0.06, 0.06]);
-    gb.add(cube(), C.ink, [0, pavTop + 0.4, 0.2], [0, 0, 0], [0.014, 0.1, 0.014]);
-    gb.add(blob(), C.lamp, [0, pavTop + 0.42, 0.2], [0, 0, 0], [0.04, 0.04, 0.04]);
-    gb.add(panel(), C.roof, [0.09, pavTop + 0.47, 0.2], [0, 0, 0], [0.16, 0.1, 1]);
-    gb.light(0, pavTop + 0.18, 0.35, 1.6);
+    gb.add(dome(), C.copper, [0, pavTop + 0.16, 0.2], [0, 0, 0], [0.42, 0.3, 0.36]);
+    gb.add(cube(), C.stoneLight, [0, pavTop + 0.34, 0.2], [0, 0, 0], [0.06, 0.06, 0.06]);
+    gb.add(cube(), C.ink, [0, pavTop + 0.42, 0.2], [0, 0, 0], [0.014, 0.1, 0.014]);
+    gb.add(blob(), C.lamp, [0, pavTop + 0.44, 0.2], [0, 0, 0], [0.04, 0.04, 0.04]);
+    gb.add(panel(), C.roof, [0.1, pavTop + 0.49, 0.2], [0, 0, 0], [0.18, 0.11, 1]);
+    gb.light(0, pavTop + 0.18, 0.4, 1.6);
   },
 
   spire: (gb, rnd, level) => {
@@ -1285,6 +1285,167 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number) 
     gb.light(0, 0.5, -0.02, 1.4);
     gb.light(-0.42, 0.5, 0.42, 0.8);
     gb.light(0.42, 0.5, 0.42, 0.8);
+  },
+
+  parterre: (gb, rnd) => {
+    // A formal garden for the square: clipped hedges, beds, a fountain, urns.
+    gb.add(quad(), C.path, [0, 0.004, 0], [0, 0, 0], [0.94, 1, 0.94]);
+    for (const [x, z, w, d] of [[0, -0.4, 0.7, 0.07], [0, 0.4, 0.7, 0.07], [-0.4, 0, 0.07, 0.7], [0.4, 0, 0.07, 0.7]] as const) {
+      gb.add(cube(), C.leafDeep, [x, 0.05, z], [0, 0, 0], [w, 0.1, d]);
+    }
+    for (const [x, z] of [[-0.19, -0.19], [0.19, -0.19], [-0.19, 0.19], [0.19, 0.19]] as const) {
+      gb.add(cube(), C.soil, [x, 0.012, z], [0, 0, 0], [0.24, 0.02, 0.24]);
+      for (let i = 0; i < 4; i++) {
+        gb.add(blob(), i % 2 ? C.clothWarm : C.lamp, [x + (rnd() - 0.5) * 0.16, 0.045, z + (rnd() - 0.5) * 0.16], [0, 0, 0], [0.035, 0.03, 0.035]);
+      }
+    }
+    // Central fountain: octagonal basin, water, pedestal and a small figure.
+    gb.add(plate(), C.stone, [0, 0.06, 0], [0, 0, 0], [0.34, 0.1, 0.34]);
+    gb.add(plate(), C.stoneLight, [0, 0.11, 0], [0, 0, 0], [0.3, 0.03, 0.3]);
+    gb.add(quad(), C.water, [0, 0.115, 0], [0, 0, 0], [0.22, 1, 0.22]);
+    gb.add(post(), C.stone, [0, 0.18, 0], [0, 0, 0], [0.07, 0.18, 0.07]);
+    gb.add(plate(), C.stoneLight, [0, 0.28, 0], [0, 0, 0], [0.1, 0.02, 0.1]);
+    gb.add(blob(), C.stoneLight, [0, 0.33, 0], [0, 0, 0], [0.08, 0.1, 0.06]);
+    gb.add(cube(), C.stoneLight, [0.05, 0.36, 0], [0, 0, 0.5], [0.12, 0.02, 0.02]);
+    gb.add(cone(), C.water, [0, 0.3, 0], [0, 0, 0], [0.06, 0.1, 0.06]);
+    gb.light(0, 0.2, 0.1, 1);
+    // Urns on stone plinths at the corners.
+    for (const [x, z] of [[-0.32, 0], [0.32, 0], [0, -0.32], [0, 0.32]] as const) {
+      gb.add(cube(), C.stoneDark, [x, 0.09, z], [0, 0, 0], [0.08, 0.18, 0.08]);
+      gb.add(plate(), C.stoneLight, [x, 0.2, z], [0, 0, 0], [0.1, 0.06, 0.08]);
+      gb.add(blob(), C.leaf, [x, 0.24, z], [0, rnd() * 3, 0], [0.11, 0.07, 0.1]);
+    }
+  },
+
+  gatehouse: (gb, rnd) => {
+    // A wall with a proper gate: two round towers, an arch and a portcullis.
+    const h = 0.46;
+    wallSeg(gb, 0, -0.42, 0.9, 0.14, h);
+    wallSeg(gb, -0.42, 0, 0.14, 0.8, h);
+    wallSeg(gb, 0.42, 0, 0.14, 0.8, h);
+    merlons(gb, 0, -0.42, 0.86, 0.18, h + 0.03, 5);
+    merlons(gb, -0.42, 0, 0.18, 0.8, h + 0.03, 4);
+    merlons(gb, 0.42, 0, 0.18, 0.8, h + 0.03, 4);
+    roundTower(gb, -0.28, 0.36, 0.13, 0.56);
+    roundTower(gb, 0.28, 0.36, 0.13, 0.56);
+    // Arch over the gate, with a stone lintel and a portcullis.
+    gb.add(cube(), C.stoneLight, [0, 0.3, 0.4], [0, 0, 0], [0.4, 0.14, 0.1]);
+    gb.add(cube(), C.stone, [0, 0.38, 0.4], [0, 0, 0], [0.46, 0.05, 0.14]);
+    gb.add(cube(), C.door, [0, 0.15, 0.42], [0, 0, 0], [0.16, 0.28, 0.03]);
+    for (let i = -2; i <= 2; i++) {
+      gb.add(cube(), C.iron, [i * 0.035, 0.29, 0.44], [0, 0, 0], [0.008, 0.14, 0.008]);
+    }
+    // Banners and torch light.
+    for (const sx of [-1, 1]) {
+      gb.add(cube(), C.ink, [sx * 0.28, 0.82, 0.36], [0, 0, 0], [0.012, 0.2, 0.012]);
+      gb.add(panel(), C.roof, [sx * 0.34, 0.84, 0.36], [0, 0, 0], [0.11, 0.14, 1]);
+      gb.add(cube(), C.lamp, [sx * 0.17, 0.3, 0.46], [0, 0, 0], [0.04, 0.05, 0.04]);
+      gb.light(sx * 0.17, 0.3, 0.5, 0.9);
+    }
+    gb.add(cube(), C.wood, [0.22, 0.06, 0.12], [0, rnd() * 0.4, 0], [0.12, 0.12, 0.12]);
+  },
+
+  vineyard: (gb, rnd) => {
+    // Rows of vines, a pergola and the barrels of the year's wine.
+    gb.add(cube(), C.soil, [0, 0.012, 0], [0, 0, 0], [0.92, 0.024, 0.92]);
+    for (let row = 0; row < 4; row++) {
+      const z = -0.27 + row * 0.18;
+      gb.add(cube(), C.woodDark, [0, 0.09, z], [0, 0, 0], [0.78, 0.018, 0.018]);
+      for (let i = 0; i < 5; i++) {
+        const x = -0.36 + i * 0.18;
+        gb.add(post(), C.wood, [x, 0.16, z], [0, 0, 0], [0.018, 0.32, 0.018]);
+        gb.add(blob(), C.leafDeep, [x, 0.22, z], [0, rnd() * 3, 0], [0.12, 0.11, 0.1]);
+        if (rnd() < 0.7) {
+          gb.add(blob(), C.leaf, [x + (rnd() - 0.5) * 0.06, 0.26, z + (rnd() - 0.5) * 0.04], [0, rnd() * 3, 0], [0.09, 0.08, 0.08]);
+        }
+        if (rnd() < 0.4) gb.add(blob(), C.clothWarm, [x, 0.26, z + 0.03], [0, 0, 0], [0.03, 0.03, 0.03]);
+      }
+    }
+    // Pergola at the back with vines over it.
+    for (const sx of [-1, 1]) {
+      gb.add(post(), C.wood, [sx * 0.3, 0.16, -0.38], [0, 0, 0], [0.03, 0.32, 0.03]);
+    }
+    gb.add(cube(), C.wood, [0, 0.32, -0.38], [0, 0, 0], [0.68, 0.025, 0.03]);
+    for (let i = 0; i < 4; i++) {
+      gb.add(blob(), i % 2 ? C.leaf : C.leafDeep, [-0.24 + i * 0.16, 0.34, -0.38], [0, rnd() * 3, 0], [0.15, 0.07, 0.1]);
+    }
+    for (const [x, z] of [[0.3, 0.3], [0.38, 0.24]] as const) {
+      gb.add(plate(), C.wood, [x, 0.08, z], [0, 0, 0], [0.09, 0.14, 0.09]);
+      gb.add(plate(), C.ink, [x, 0.08, z], [0, 0, 0], [0.095, 0.02, 0.095]);
+    }
+    gb.add(cube(), C.wood, [-0.3, 0.08, 0.32], [0, 0, 0], [0.1, 0.14, 0.06]);
+    gb.light(0, 0.2, 0.2, 0.8);
+  },
+
+
+  watergarden: (gb, rnd) => {
+    // A garden on the shore: pond, lily pads, reeds and a little landing.
+    gb.add(quad(), C.leafLight, [0, 0.004, 0], [0, 0, 0], [0.94, 1, 0.94]);
+    gb.add(plate(), C.stone, [0.02, 0.02, 0.02], [0, 0, 0], [0.62, 0.04, 0.58]);
+    gb.add(quad(), C.water, [0.02, 0.045, 0.02], [0, 0, 0], [0.54, 1, 0.5]);
+    for (let i = 0; i < 5; i++) {
+      const x = -0.16 + rnd() * 0.36;
+      const z = -0.14 + rnd() * 0.32;
+      gb.add(plate(), C.leaf, [x, 0.052, z], [0, rnd() * 3, 0], [0.09, 0.012, 0.08]);
+      if (rnd() < 0.5) gb.add(blob(), C.cloth, [x + 0.02, 0.06, z], [0, 0, 0], [0.02, 0.02, 0.02]);
+    }
+    // Reeds along the water's edge.
+    for (let i = 0; i < 6; i++) {
+      const x = -0.3 + i * 0.11;
+      gb.add(post(), C.leafDeep, [x, 0.1, -0.3], [0, 0, 0.05 * (i % 2 ? 1 : -1)], [0.018, 0.2, 0.018]);
+      gb.add(cone(), C.leafDeep, [x, 0.17, -0.3], [0, 0, 0], [0.04, 0.08, 0.04]);
+    }
+    // A small wooden landing at one corner.
+    gb.add(cube(), C.wood, [0.28, 0.055, 0.26], [0, 0, 0], [0.22, 0.03, 0.14]);
+    for (const x of [0.2, 0.36]) gb.add(post(), C.woodDark, [x, 0.02, 0.32], [0, 0, 0], [0.04, 0.16, 0.04]);
+    // Beds and a bench under a willow.
+    for (const [x, z] of [[-0.3, 0.3], [0.3, -0.3]] as const) {
+      gb.add(cube(), C.soil, [x, 0.012, z], [0, 0, 0], [0.2, 0.02, 0.2]);
+      for (let i = 0; i < 3; i++) {
+        gb.add(blob(), i % 2 ? C.clothWarm : C.lamp, [x + (rnd() - 0.5) * 0.14, 0.045, z + (rnd() - 0.5) * 0.14], [0, 0, 0], [0.032, 0.028, 0.032]);
+      }
+    }
+    bench(gb, -0.24, 0.18, 0.4);
+    grownTree(gb, -0.26, -0.28, 3, rnd);
+    gb.light(0.24, 0.12, 0.3, 0.8);
+  },
+
+  stable: (gb, rnd) => {
+    // A long low stable with a fenced yard, hay, trough and a pale horse.
+    gb.add(cube(), C.stoneDark, [0, 0.02, -0.04], [0, 0, 0], [0.82, 0.04, 0.66]);
+    gb.add(cube(), C.wood, [0, 0.25, -0.14], [0, 0, 0], [0.68, 0.42, 0.38]);
+    for (let i = 0; i < 6; i++) {
+      gb.add(cube(), C.woodDark, [-0.28 + i * 0.11, 0.25, 0.045], [0, 0, 0], [0.016, 0.42, 0.02]);
+    }
+    roofAt(gb, 0, -0.14, 0.4, 0.24, 0.18, C.thatch, 0.46);
+    gb.add(cube(), C.door, [0.16, 0.16, 0.05], [0, 0, 0], [0.18, 0.27, 0.03]);
+    gb.add(cube(), C.woodDark, [0.16, 0.16, 0.075], [0, 0, 0], [0.02, 0.27, 0.012]);
+    gb.add(cube(), C.glass, [0.16, 0.37, 0.05], [0, 0, 0], [0.09, 0.08, 0.02]);
+    gb.add(cube(), C.wood, [0.16, 0.32, 0.06], [0, 0, 0], [0.15, 0.02, 0.03]);
+    // Hay on the right of the door, trough beyond it.
+    for (const [x, z, h] of [[0.28, 0.3, 0.08], [0.34, 0.33, 0.08], [0.31, 0.31, 0.17]] as const) {
+      gb.add(cube(), C.thatch, [x, h, z], [0, rnd() * 0.4, 0], [0.12, 0.1, 0.11]);
+    }
+    gb.add(cube(), C.stone, [-0.3, 0.06, 0.24], [0, 0, 0], [0.2, 0.08, 0.09]);
+    gb.add(quad(), C.water, [-0.3, 0.103, 0.24], [0, 0, 0], [0.17, 1, 0.06]);
+    // Fence along the yard.
+    for (const x of [-0.38, -0.06, 0.3]) {
+      gb.add(post(), C.woodDark, [x, 0.1, 0.45], [0, 0, 0], [0.026, 0.2, 0.026]);
+    }
+    gb.add(cube(), C.wood, [-0.04, 0.16, 0.45], [0, 0, 0], [0.74, 0.02, 0.026]);
+    // The horse stands on the left, pale against the dark wood.
+    const horse = 0xe0d3bb;
+    gb.add(blob(), horse, [-0.06, 0.25, 0.26], [0, 0.25, 0], [0.3, 0.15, 0.13]);
+    gb.add(cube(), horse, [0.11, 0.33, 0.24], [0, 0, -0.42], [0.078, 0.17, 0.085]);
+    gb.add(blob(), horse, [0.17, 0.42, 0.24], [0, 0, 0], [0.11, 0.085, 0.075]);
+    gb.add(cone(), 0x6b6560, [0.14, 0.49, 0.24], [0, 0, 0], [0.035, 0.055, 0.03]);
+    gb.add(cone(), 0x6b5140, [0.19, 0.36, 0.24], [0, 0, 0], [0.028, 0.04, 0.028]);
+    for (const [x, z] of [[-0.16, 0.22], [-0.16, 0.3], [0.05, 0.22], [0.05, 0.3]] as const) {
+      gb.add(post(), 0xb8a68a, [x, 0.14, z], [0, 0, 0], [0.028, 0.28, 0.028]);
+    }
+    gb.add(post(), 0x6b5140, [-0.21, 0.25, 0.26], [0, 0, 0.55], [0.026, 0.16, 0.026]);
+    gb.add(cube(), 0x6b5140, [-0.27, 0.34, 0.26], [0, 0, 0.3], [0.06, 0.1, 0.05]);
+    gb.light(0.16, 0.37, 0.09, 0.8);
   },
 };
 

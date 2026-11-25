@@ -37,6 +37,18 @@ export const BLOCK_DEFS: BlockDef[] = [
   { kind: 'wall', label: 'Muralla', swatch: '#b9ae9c', hint: 'Cinco clics: muralla, torreón, fortaleza y alcázar.' },
 ];
 
+/**
+ * Some blocks are earned: they appear locked in the palette until the town has
+ * discovered enough things. Casa, torre, camino, árbol and plaza are free.
+ */
+export const UNLOCK_AT: Partial<Record<BlockKind, number>> = {
+  field: 2,
+  dock: 4,
+  mill: 6,
+  garden: 10,
+  wall: 16,
+};
+
 /** A placed block carries its height: click again to build up. */
 export interface Placed {
   kind: BlockKind;

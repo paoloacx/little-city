@@ -3,7 +3,8 @@
 Un diorama de pueblo dibujado a mano, en el navegador: colocas bloques en una isla y cada uno se
 convierte en algo distinto según sus vecinos y su altura, hasta cinco pisos. Es un MVP propio,
 inspirado en la mecánica de [Little City](https://littlecity.io) de Derek Yao, sin usar su código ni
-su arte: **53 formas** distintas, **43 hallazgos**, y un contador de clics que no se pierde.
+su arte: **58 formas** distintas, **48 hallazgos**, bloques que se desbloquean jugando y cuatro islas
+distintas.
 
 ```bash
 npm install
@@ -16,19 +17,27 @@ npm run preview  # sirve dist/
 
 - Elige un bloque y toca una casilla. **Vuelve a tocarla y sube un piso, hasta cinco.** Nada se
   destruye al insistir: para quitar algo está **Borrar**. El panel lleva la **cuenta de clics**.
+- **Deshacer** (`Ctrl`+`Z`) vuelve atrás hasta cuarenta veces; **Pincel** (`B`) pinta arrastrando, y
+  con **clic derecho** una casilla sube de golpe a cinco alturas.
 - La altura cambia lo que sale: una casa pasa por **casa alta, casona, casa de vecindad y palacio**;
   una torre, por **campanario, atalaya, aguja y torre maestra**; un **árbol crece de verdad en cada
   clic** (tronco, ramas y copa), hasta el roble; un **jardín**, por parque, invernadero, laberinto y
   arboreto; una **muralla**, por muralla, torreón, fortaleza y alcázar.
+- Los bloques se ganan: **Campo** con 2 hallazgos, **Muelle** con 4, **Molino** con 6, **Jardín** con
+  10 y **Muralla** con 16. La paleta enseña el candado y lo que falta; al llegar, avisa.
 - Los vecinos también mandan, y cambian en cuanto cambias una altura: la primera regla que encaja
   decide lo que se dibuja. Además, **una casa pegada a algo mucho más alto gana un piso** (sin
   romperse): el pueblo crece hacia dentro, no se pisa.
 - Arrastra para girar la isla; rueda o pellizco para acercarte.
-- Atajos: `1`–`9` y `0` eligen bloque, `E` borra.
-- **Crecer** genera un pueblo nuevo en otra isla; **Vaciar** deja la isla en blanco.
+- Atajos: `1`–`9` y `0` eligen bloque, `B` el pincel, `E` borra, `Ctrl`+`Z` deshace.
+- **Crecer** genera un pueblo nuevo en otra isla, y cada isla es distinta: **prado**, **bosque**,
+  **dunas** o **roquedo**, con sus flores, setas, conchas o peñascos. **Vaciar** deja la isla en
+  blanco.
 - **Compartir** copia un enlace con el pueblo dentro (el estado va en el `#` de la URL, sin servidor);
-  **Postal** descarga el diorama en PNG; **Guía** lista los 43 hallazgos; **Sonido** enciende el
-  viento y las gaviotas; **Ciclo** pone el día y la noche en marcha.
+  **Postal** descarga el diorama en PNG; **Guía** lista los 48 hallazgos; **Pueblos** guarda tres
+  partidas en el navegador para volver a ellas; **Foto** esconde la interfaz (Esc sale); **Sonido**
+  enciende el viento y las gaviotas; **Ciclo** pone el día y la noche en marcha.
+- Al entrar por primera vez sale una tarjeta con las cuatro reglas del juego, y no vuelve a salir.
 - Caminos y muelles se pueden poner **sobre el agua**: un camino sobre el agua es un puente.
 - El pueblo se guarda solo en `localStorage` y se recupera al volver.
 
@@ -44,6 +53,16 @@ Cada clic en la misma casilla sube un piso, y el edificio cambia de forma. Lo mi
 | 4 | Casa de vecindad | Aguja | Roble (más grande) | Laberinto | Fortaleza |
 | 5 | Palacio | Torre maestra | Roble con columpio | Arboreto | Alcázar |
 
+Y estas son las mezclas que no dependen de la altura:
+
+| Si juntas | Sale |
+|---|---|
+| Jardín junto a la plaza | Jardín de la plaza, con fuente |
+| Jardín en la orilla | Jardín de agua, con nenúfares y embarcadero |
+| Muralla de 2–3 clics junto a una torre | Puerta de la muralla, con rastrillo |
+| Campo junto a un jardín | Viñedo, con parras y barricas |
+| Casa entre dos campos | Cuadra, con caballo y forraje |
+
 Y lo que pasa alrededor:
 
 - Si el vecino más alto está **tres o más niveles por encima**, la casilla se dibuja con un piso de
@@ -53,12 +72,14 @@ Y lo que pasa alrededor:
   casillas de alrededor, sin que nada se pierda.
 - La guía muestra los hallazgos que ya has visto y los que faltan en gris.
 
-## Los 43 hallazgos
+## Los 48 hallazgos
 
 Cada casilla se resuelve a partir de sus vecinos y de sus pisos. Manda la primera regla que encaja:
 
 | Regla | Se vuelve | Cuándo |
 |---|---|---|
+| R-G06 | Jardín de agua | Un jardín en la orilla, con estanque, nenúfares y embarcadero |
+| R-G05 | Jardín de la plaza | Un jardín junto a la plaza, con fuente y setos recortados |
 | R-G04 | Arboreto | Un jardín de cinco clics, con árboles de todo el mundo |
 | R-G03 | Laberinto | Un jardín de cuatro clics: setos en laberinto |
 | R-G02 | Invernadero | Un jardín de tres clics, con cristaleras |
@@ -66,6 +87,7 @@ Cada casilla se resuelve a partir de sus vecinos y de sus pisos. Manda la primer
 | R-W04 | Alcázar | Una muralla de cinco clics: el alcázar del pueblo |
 | R-W03 | Fortaleza | Una muralla de cuatro clics, con dos torres y puerta |
 | R-W02 | Torreón | Una muralla de tres clics, con torre redonda |
+| R-W05 | Puerta de la muralla | Una muralla de dos o tres clics junto a una torre |
 | R-W01 | Muralla | Una tapia de dos clics, con adarve y almenas |
 | R-M04 | Ciudadela | Un castillo con una torre de cuatro pisos o más |
 | R-M03 | Castillo | Tres torres juntas. Si las subes, crece |
@@ -93,6 +115,7 @@ Cada casilla se resuelve a partir de sus vecinos y de sus pisos. Manda la primer
 | R-H19 | Herrería | Una casa junto a un campo y un camino |
 | R-H07 | Tienda | Una casa abierta a dos calles |
 | R-S01 | Puesto de mercado | Una casa entre la plaza y el camino |
+| R-H24 | Cuadra | Una casa entre dos campos, con caballos |
 | R-H18 | Granero | Una casa junto a un campo |
 | R-H15 | Casa de campo | Una casa entre dos o más árboles |
 | R-B01 | Puente | Un camino puesto sobre el agua |
@@ -100,8 +123,9 @@ Cada casilla se resuelve a partir de sus vecinos y de sus pisos. Manda la primer
 | R-M11 | Teatro | Una plaza junto a una torre |
 | R-M12 | Templete | Una plaza entre tres árboles o más |
 | R-F01 | Plaza con fuente | Cuatro plazas juntas |
-| R-P02 | Roble | Un árbol de tres clics: el gran roble del pueblo |
+| R-P02 | Roble | El gran roble: sigue creciendo en el cuarto y el quinto clic |
 | R-P01 | Huerto | Cuatro árboles juntos |
+| R-F02 | Viñedo | Un campo junto a un jardín, con sus parras |
 
 Los bloques base (casa, torre, molino, calle, plaza, árbol, embarcadero, campo, jardín y tapia) no
 cuentan como hallazgo, pero sí cambian de altura. Un jardín al lado de una casa hace que la casa gane
@@ -111,6 +135,8 @@ un piso, y una muralla junta convierte un rincón en fortaleza: todo se intercon
 
 - La gente pasea por las calles con las piernas y los brazos articulados; en la plaza hay gente
   parada, meciéndose, y algunos niños. Uno de cada tres lleva la cesta de la compra.
+- **Perros** que trotan de acá para allá moviendo la cola, y un **globo aerostático** que da vueltas
+  al pueblo, subiendo y bajando con la brisa.
 - **Gatos** que se cruzan por las calles, con la cola levantada y las patas moviéndose; **palomas**
   que picotean en la plaza y en el muelle.
 - Los veleros y los botes de remos navegan frente a la costa dejando estelas que se abren.
@@ -125,17 +151,19 @@ un piso, y una muralla junta convierte un rincón en fortaleza: todo se intercon
 | Archivo | Qué hace |
 |---|---|
 | `src/grid.ts` | rejilla, isla procedural (semilla), bloques con nivel, guardado en `localStorage` |
-| `src/rules.ts` | hechos de cada casilla (vecinos, agua, nivel, altura de alrededor) y 43 reglas ordenadas |
+| `src/rules.ts` | hechos de cada casilla (vecinos, agua, nivel, altura de alrededor) y 48 reglas ordenadas |
 | `src/grow.ts` | el generador de "crecer un pueblo": plaza, calles, callejón, castillo, granja, puerto |
 | `src/geo.ts` | acumula primitivas en una geometría con color por vértice y recoge las luces |
-| `src/buildings.ts` | los 53 roles en 3D: pisos apilados, cúpulas, castillos, invernaderos, árboles que crecen |
+| `src/buildings.ts` | los 58 roles en 3D: palacios, castillos, invernaderos, viñedos, cuadras, árboles que crecen |
 | `src/materials.ts` | tinta en cinco manchas (sin rayado), agua con oleaje suave, humo y luces; `uDusk` mueve todo al atardecer |
-| `src/life.ts` | gente articulada, gatos, palomas, grupos en la plaza, barcos con estela, gaviotas, humo |
-| `src/scene.ts` | cámara, isla, agua, sombras dibujadas, reconstrucción, ciclo de luz y postal |
+| `src/life.ts` | gente articulada, gatos, perros, palomas, globo aerostático, barcos con estela, gaviotas, humo |
+| `src/scene.ts` | cámara, isla con su bioma y sus hierbas, agua, sombras, reconstrucción, ciclo de luz y postal |
 | `src/share.ts` | codifica el pueblo en la URL (`#p=semilla.xzkN…`) y lo valida al cargar |
 | `src/guide.ts` | la guía de hallazgos |
+| `src/intro.ts` | la tarjeta de bienvenida, que se muestra una sola vez |
+| `src/saves.ts` | tres pueblos guardados en `localStorage`, con su fecha y sus hallazgos |
 | `src/audio.ts` | viento, agua y gaviotas con WebAudio: sin archivos de sonido |
-| `src/main.ts` | paleta, puntero, alturas, pellizco, panel, avisos |
+| `src/main.ts` | paleta con candados, puntero, pincel, deshacer, alturas, panel, avisos |
 
 Notas de implementación que costaron encontrar:
 
@@ -150,8 +178,11 @@ Notas de implementación que costaron encontrar:
   diorama parezca flotar en una hoja.
 - Luces y humo son dos nubes de `Points`, una llamada de dibujo cada una: la posición, el tamaño y la
   opacidad de cada punto se calculan en el shader con el reloj, sin tocar la CPU.
-- Los edificios se reconstruyen al colocar, pero la vida se anima por reloj: los barcos, los gatos y
-  las gaviotas no saltan, porque su posición depende del tiempo y no de la reconstrucción.
+- Los edificios se reconstruyen al colocar, pero la vida se anima por reloj: los barcos, los perros,
+  el globo y las gaviotas no saltan, porque su posición depende del tiempo y no de la reconstrucción.
+- Deshacer guarda fotos del pueblo (semilla, bloques y clics) en memoria: cuesta cuatro números por
+  casilla y aguanta cuarenta pasos. El pincel recuerda la última casilla pintada para que un arrastre
+  largo no convierta una casa en una torre.
 
 ## Publicarlo en abierto
 
@@ -185,10 +216,10 @@ una URL pública al momento. También vale `npx vercel --prod` o `npx netlify de
 
 ## Qué falta respecto a la referencia
 
-1. Contenido: la referencia tiene 102 edificios especiales con guía; aquí hay 43.
+1. Contenido: la referencia tiene 102 edificios especiales con guía; aquí hay 48.
 2. Estaciones y clima: nieve, lluvia, fiestas y mercado con puestos que se montan.
 3. Objetos narrados: alguien llevando pan del horno al puesto, barcos que cargan y descargan.
-4. Varios pueblos guardados y una galería de postales.
+4. Una galería de postales (los pueblos guardados ya están, en tres huecos).
 5. PWA instalable y modo sin conexión; la guía como páginas estáticas con su propia URL.
 
 `repo/` contiene el build público de Little City, clonado solo para estudiar cómo está hecho (y su

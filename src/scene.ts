@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { GRID, HALF, Town, isShore, landAt, makeIsland, rng, worldX, worldZ } from './grid';
-import { GeoBuilder, Light, blob, cone, panel, quad } from './geo';
+import { GeoBuilder, Light, blob, cone, cube, panel, post, quad } from './geo';
 import { Resolved, resolveTown } from './rules';
 import { buildRole } from './buildings';
 import { Life } from './life';
@@ -22,15 +22,66 @@ const WATER_Y = -0.45;
 /** One day and one night. */
 const CYCLE = 210;
 
-const PALETTE = {
-  grass: [0x9dbb78, 0xa6c281, 0x94b371, 0xa2bd7c],
-  sand: 0xe8d7ad,
-  sandDeep: 0xdcc79a,
-  earth: 0xa9855f,
-  earthDeep: 0x8e6e4e,
-  rock: 0xb9ab95,
-  pebble: 0xc9bda6,
-};
+interface Biome {
+  name: string;
+  grass: number[];
+  sand: number;
+  sandDeep: number;
+  earth: number;
+  earthDeep: number;
+  rock: number;
+  pebble: number;
+  /** What grows between the tiles. */
+  props: 'flowers' | 'forest' | 'shells' | 'boulders';
+}
+
+/** Four islands, so "Crecer" does not always bring the same meadow. */
+const BIOMES: Biome[] = [
+  {
+    name: 'prado',
+    grass: [0x9dbb78, 0xa6c281, 0x94b371, 0xa2bd7c],
+    sand: 0xe8d7ad,
+    sandDeep: 0xdcc79a,
+    earth: 0xa9855f,
+    earthDeep: 0x8e6e4e,
+    rock: 0xb9ab95,
+    pebble: 0xc9bda6,
+    props: 'flowers',
+  },
+  {
+    name: 'bosque',
+    grass: [0x7e9d63, 0x88a86d, 0x73915a, 0x93b076],
+    sand: 0xdcc9a0,
+    sandDeep: 0xcbb68d,
+    earth: 0x92704d,
+    earthDeep: 0x7a5c3f,
+    rock: 0x9aa08c,
+    pebble: 0xb3b199,
+    props: 'forest',
+  },
+  {
+    name: 'dunas',
+    grass: [0xb3bf85, 0xbdc890, 0xa9b57b, 0xc4cd97],
+    sand: 0xf0e2b8,
+    sandDeep: 0xdecfa4,
+    earth: 0xc0a172,
+    earthDeep: 0xa78a5e,
+    rock: 0xcdbb9d,
+    pebble: 0xded0b4,
+    props: 'shells',
+  },
+  {
+    name: 'roquedo',
+    grass: [0x93a883, 0x9db18a, 0x8a9f7c, 0xa3b592],
+    sand: 0xd6c7ab,
+    sandDeep: 0xc4b498,
+    earth: 0x9c8a74,
+    earthDeep: 0x82715e,
+    rock: 0xa79c8a,
+    pebble: 0xbdb3a0,
+    props: 'boulders',
+  },
+];
 
 export interface CameraState {
   azimuth: number;
@@ -68,6 +119,7 @@ export class World {
   private cycleOn = true;
   private dusk = 0;
   private mask: boolean[][] = [];
+  private biome: Biome = BIOMES[0];
   private seed = 1;
   private disposed = false;
 
@@ -117,12 +169,18 @@ export class World {
     this.scene.add(water);
   }
 
+  /** The name of the island's landscape, for the odd toast. */
+  get biomeName(): string {
+    return this.biome.name;
+  }
+
   /** Builds the island plate: a grassy top, a sandy lip and the cliff below. */
   setSeed(seed: number): void {
     this.seed = seed;
     this.mask = makeIsland(seed);
     this.clearGroup(this.terrain);
 
+    this.biome = BIOMES[Math.floor(rng((seed ^ 0x51ed270b) >>> 0)() * BIOMES.length) % BIOMES.length];
     const gb = new GeoBuilder();
     const random = rng(seed ^ 0x9e3779b9);
     for (let z = 0; z < GRID; z++) {
@@ -131,8 +189,8 @@ export class World {
         const wx = worldX(x) * TILE;
         const wz = worldZ(z) * TILE;
         const shore = isShore(this.mask, x, z);
-        const pick = PALETTE.grass[Math.floor(random() * PALETTE.grass.length)];
-        const top = shore ? PALETTE.sand : pick;
+        const pick = this.biome.grass[Math.floor(random() * this.biome.grass.length)];
+        const top = shore ? this.biome.sand : pick;
         gb.add(quad(), top, [wx, 0, wz], [0, 0, 0], [TILE, 1, TILE]);
         if (!shore && random() < 0.7) {
           gb.add(quad(), pick, [wx, 0.002 + random() * 0.001, wz], [0, random() * Math.PI, 0], [TILE * 0.5, 1, TILE * 0.5]);
@@ -149,30 +207,13 @@ export class World {
           const cz = wz + (dz * TILE) / 2;
           const rotY = dx !== 0 ? (dx > 0 ? Math.PI / 2 : -Math.PI / 2) : dz > 0 ? 0 : Math.PI;
           // Sandy lip at the top, darker earth under it.
-          gb.add(panel(), PALETTE.sandDeep, [cx, -0.11, cz], [0, rotY, 0], [TILE, 0.22, 1]);
-          gb.add(panel(), PALETTE.earth, [cx, -0.43, cz], [0, rotY, 0], [TILE, 0.42, 1]);
-          gb.add(panel(), PALETTE.earthDeep, [cx, -0.72, cz], [0, rotY, 0], [TILE, 0.16, 1]);
+          gb.add(panel(), this.biome.sandDeep, [cx, -0.11, cz], [0, rotY, 0], [TILE, 0.22, 1]);
+          gb.add(panel(), this.biome.earth, [cx, -0.43, cz], [0, rotY, 0], [TILE, 0.42, 1]);
+          gb.add(panel(), this.biome.earthDeep, [cx, -0.72, cz], [0, rotY, 0], [TILE, 0.16, 1]);
         }
 
-        // Pebbles and tufts: the small stuff that makes a diorama feel drawn.
-        if (random() < 0.22) {
-          const px = wx + (random() - 0.5) * 0.6;
-          const pz = wz + (random() - 0.5) * 0.6;
-          if (random() < 0.5) {
-            gb.add(blob(), PALETTE.pebble, [px, 0.035, pz], [0, random() * 3, 0], [0.1, 0.07, 0.1]);
-          } else {
-            gb.add(cone(), PALETTE.grass[0], [px, 0.005, pz], [0, random() * 3, 0], [0.09, 0.1, 0.09]);
-          }
-        }
-        if (shore && random() < 0.5) {
-          gb.add(
-            blob(),
-            PALETTE.rock,
-            [wx + (random() - 0.5) * 0.5, 0.04, wz + (random() - 0.5) * 0.5],
-            [0, random() * 3, 0],
-            [0.14, 0.1, 0.14],
-          );
-        }
+        // The small stuff that makes a diorama feel drawn: each island has its own.
+        this.scatter(gb, wx, wz, shore, random);
       }
     }
 
@@ -185,6 +226,104 @@ export class World {
     ink.frustumCulled = false;
     this.terrain.add(ink);
     this.terrain.userData.geometries = new Set([geometry]);
+  }
+
+  /**
+   * What grows between the tiles, per island: flowers in the meadow, mushrooms
+   * and fallen logs in the wood, shells on the dunes, boulders on the rock.
+   */
+  private scatter(gb: GeoBuilder, wx: number, wz: number, shore: boolean, random: () => number): void {
+    const b = this.biome;
+    const spot = (spread = 0.6): [number, number] => [
+      wx + (random() - 0.5) * spread,
+      wz + (random() - 0.5) * spread,
+    ];
+    const tuft = (x: number, z: number, scale = 1): void => {
+      gb.add(cone(), b.grass[0], [x, 0.004, z], [0, random() * 3, 0], [0.09 * scale, 0.1 * scale, 0.09 * scale]);
+    };
+    const pebble = (x: number, z: number, scale = 1, color: number = b.pebble): void => {
+      gb.add(blob(), color, [x, 0.03 * scale, z], [0, random() * 3, 0], [0.1 * scale, 0.07 * scale, 0.1 * scale]);
+    };
+    const flower = (x: number, z: number): void => {
+      const petal = [0xd98d6a, 0xf6d98a, 0xece4d3, 0xb5874a][Math.floor(random() * 4)];
+      gb.add(cube(), 0x6f9a52, [x, 0.022, z], [0, 0, 0], [0.012, 0.045, 0.012]);
+      gb.add(blob(), petal, [x, 0.05, z], [0, random() * 3, 0], [0.032, 0.026, 0.032]);
+    };
+
+    if (shore) {
+      if (random() < 0.55) {
+        const [x, z] = spot(0.5);
+        if (b.props === 'shells') {
+          for (let i = 0; i < 3; i++) {
+            gb.add(blob(), 0xf0e6d2, [x + (random() - 0.5) * 0.2, 0.02, z + (random() - 0.5) * 0.2], [0, 0, 0], [0.045, 0.025, 0.045]);
+          }
+          gb.add(cube(), 0xd98d6a, [x + 0.1, 0.02, z - 0.06], [0.3, 0, 0.2], [0.05, 0.018, 0.05]);
+        } else if (b.props === 'forest') {
+          // Driftwood: a small trunk of pale wood.
+          gb.add(cube(), 0xb3a78e, [x, 0.035, z], [0, random() * 3, 0], [0.22, 0.05, 0.06]);
+          gb.add(blob(), 0x8a7a5f, [x + 0.1, 0.04, z], [0, 0, 0], [0.06, 0.05, 0.05]);
+        } else {
+          pebble(x, z, 1 + random() * 0.5, b.rock);
+          if (random() < 0.5) tuft(x + 0.1, z - 0.05, 0.8);
+        }
+      }
+      return;
+    }
+
+    switch (b.props) {
+      case 'flowers':
+        if (random() < 0.3) {
+          const [x, z] = spot();
+          if (random() < 0.45) {
+            for (let i = 0; i < 3; i++) flower(x + (random() - 0.5) * 0.16, z + (random() - 0.5) * 0.16);
+          } else if (random() < 0.5) {
+            tuft(x, z, 1.2);
+          } else {
+            pebble(x, z, 0.8);
+          }
+        }
+        break;
+      case 'forest':
+        if (random() < 0.34) {
+          const [x, z] = spot();
+          const kind = random();
+          if (kind < 0.4) {
+            // A mushroom ring.
+            for (let i = 0; i < 2; i++) {
+              const mx = x + (random() - 0.5) * 0.2;
+              const mz = z + (random() - 0.5) * 0.2;
+              gb.add(post(), 0xe8dcc4, [mx, 0.03, mz], [0, 0, 0], [0.022, 0.06, 0.022]);
+              gb.add(cone(), 0xc4633f, [mx, 0.055, mz], [0, 0, 0], [0.07, 0.045, 0.07]);
+            }
+          } else if (kind < 0.6) {
+            gb.add(cube(), 0x8a6a4f, [x, 0.03, z], [0, random() * 3, 0], [0.2, 0.055, 0.07]);
+          } else {
+            tuft(x, z, 1.4);
+          }
+        }
+        break;
+      case 'shells':
+        if (random() < 0.24) {
+          const [x, z] = spot();
+          if (random() < 0.4) {
+            gb.add(blob(), 0xf0e6d2, [x, 0.02, z], [0, 0, 0], [0.05, 0.028, 0.05]);
+          } else {
+            tuft(x, z, 1.1);
+          }
+        }
+        break;
+      case 'boulders':
+        if (random() < 0.3) {
+          const [x, z] = spot();
+          if (random() < 0.55) {
+            pebble(x, z, 1.7 + random(), b.rock);
+            gb.add(blob(), 0x8f9c74, [x + 0.05, 0.055, z], [0, 0, 0], [0.07, 0.045, 0.06]);
+          } else {
+            tuft(x, z, 1.2);
+          }
+        }
+        break;
+    }
   }
 
   /** Rebuilds every building from the current grid. */
