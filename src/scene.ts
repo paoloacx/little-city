@@ -172,6 +172,8 @@ export class World {
   private mask: boolean[][] = [];
   private biome: Biome = BIOMES[0];
   private seed = 1;
+  /** A real coastline laid over the drawn one, when a place is loaded. */
+  private island: boolean[][] | null = null;
   private disposed = false;
 
   readonly cam: CameraState = { azimuth: 0.72, elevation: 0.6, distance: 22 };
@@ -244,7 +246,7 @@ export class World {
   /** Builds the island plate: a grassy top, a sandy lip and the cliff below. */
   setSeed(seed: number): void {
     this.seed = seed;
-    this.mask = makeIsland(seed);
+    this.mask = this.island ?? makeIsland(seed);
     this.clearCellCache();
     this.clearGroup(this.terrain);
 
@@ -594,6 +596,13 @@ export class World {
   /** The weather of the season, over the whole island. */
   setWeather(kind: Weather): void {
     this.life.setWeather(kind);
+  }
+
+  /** Lays a real place under the town: its coastline replaces the drawn one. */
+  setIsland(mask: boolean[][] | null): void {
+    this.island = mask;
+    this.clearCellCache();
+    this.setSeed(this.seed);
   }
 
   /** Turns a pointer position into a tile, or null when it misses the island. */

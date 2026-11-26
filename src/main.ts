@@ -7,6 +7,8 @@ import { World } from './scene';
 import { encodeTown, shareUrl, townFromHash } from './share';
 import { openGuide } from './guide';
 import { Season, getSeason, nextSeason, seasonById, seasonForMonth, setSeason } from './season';
+import { DEFAULT_SIZE, Place, loadPlace, readAnyCache, seedOf, writeCache } from './place';
+import { openPlaceDialog } from './placeui';
 import { introSeen, openIntro } from './intro';
 import { loadSlots, openSaves, persistSlots, type SlotData } from './saves';
 import { Ambience } from './audio';
@@ -29,6 +31,7 @@ const guideEl = document.getElementById('guide') as HTMLButtonElement;
 const soundEl = document.getElementById('sound') as HTMLButtonElement;
 const cycleEl = document.getElementById('cycle') as HTMLButtonElement;
 const seasonEl = document.getElementById('season') as HTMLButtonElement;
+const placeEl = document.getElementById('place') as HTMLButtonElement;
 const undoEl = document.getElementById('undo') as HTMLButtonElement;
 const rotateEl = document.getElementById('rotate') as HTMLButtonElement;
 const brushEl = document.getElementById('brush') as HTMLButtonElement;
@@ -90,6 +93,15 @@ function loadSeason(): Season {
 
 setSeason(loadSeason());
 world.setSeed(town.seed);
+
+/*
+ * A town that came from a real place keeps its coastline: the seed says which
+ * place it was, so the cached square goes back under it, even from "Pueblos".
+ */
+const cachedPlace = readAnyCache();
+if (cachedPlace && seedOf(cachedPlace.lat, cachedPlace.lon) === town.seed) {
+  world.setIsland(cachedPlace.mask);
+}
 totalEl.textContent = String(SPECIAL_COUNT);
 boot();
 paintSeason();
@@ -628,7 +640,7 @@ clearEl.addEventListener('click', () => {
 shareEl.addEventListener('click', () => {
   const payload = encodeTown(town);
   const url = shareUrl(payload);
-  history.replaceState(null, '', `#p=${payload}`);
+  history.replaceState(null, '', `${location.search}#p=${payload}`);
   const done = (): void => toast('Enlace copiado: el pueblo va dentro');
   if (navigator.clipboard?.writeText) {
     navigator.clipboard.writeText(url).then(done).catch(() => toast('El enlace está en la barra del navegador'));
@@ -698,6 +710,61 @@ function applySeason(season: Season, announce = false): void {
 }
 
 seasonEl.addEventListener('click', () => applySeason(nextSeason(), true));
+
+/* ------------------------------------------------------------ real places */
+
+/**
+ * Lays a real barrio on the board: its coastline becomes the island, and one
+ * block per cell comes from what OpenStreetMap has there. From then on the town
+ * is yours to change, like any other.
+ */
+function applyPlace(place: Place): void {
+  const seed = seedOf(place.lat, place.lon);
+  town = { seed, blocks: new Map() };
+  for (const block of place.blocks) {
+    const at = key(block.x, block.z);
+    if (town.blocks.has(at)) continue;
+    town.blocks.set(at, { kind: block.kind, level: block.level, rot: block.rot });
+  }
+  clicks = 0;
+  lastPlaced = null;
+  undoStack.length = 0;
+  undoEl.disabled = true;
+  writeCache(place);
+  world.setIsland(place.mask);
+  world.setSeed(seed);
+  resolve(false);
+  updateLocks();
+  syncPanel();
+  syncClicks();
+  save();
+  const params = new URLSearchParams(location.search);
+  params.set('sitio', `${place.lat.toFixed(5)},${place.lon.toFixed(5)},${place.size}`);
+  params.set('lugar', place.name);
+  history.replaceState(null, '', `?${params}${location.hash}`);
+  document.body.dataset.lugar = place.name;
+  toast(`${place.name}: el barrio ya está en el tablero`);
+}
+
+placeEl.addEventListener('click', () => openPlaceDialog(applyPlace));
+
+/*
+ * A link can carry the place, so the same barrio opens again: `?sitio=lat,lon,m`.
+ * It is fetched again, because the map is the authority on what is there.
+ */
+const siteParam = new URLSearchParams(location.search).get('sitio');
+if (siteParam) {
+  const [latText, lonText, sizeText] = siteParam.split(',');
+  const lat = Number(latText);
+  const lon = Number(lonText);
+  const size = Number(sizeText) || DEFAULT_SIZE;
+  const name = new URLSearchParams(location.search).get('lugar') ?? 'Tu barrio';
+  if (Number.isFinite(lat) && Number.isFinite(lon)) {
+    void loadPlace(lat, lon, size, name)
+      .then(applyPlace)
+      .catch(() => toast('No se pudo abrir el lugar del enlace; sigues en tu pueblo'));
+  }
+}
 
 renderPalette();
 

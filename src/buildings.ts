@@ -919,8 +919,9 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
     for (let i = 0; i < 2; i++) {
       gb.add(blob(), mixHex(C.stone, C.path, 0.6), [(rnd() - 0.5) * 0.8, 0.02, (rnd() - 0.5) * 0.8], [0, rnd() * 3, 0], [0.07, 0.03, 0.07]);
     }
-    if (rnd() < 0.75) lamp(gb, 0.4, 0.4);
-    if (rnd() < 0.3) lamp(gb, -0.4, -0.4);
+    // A street in a row of them needs fewer lamps, or the town is all posts.
+    if (rnd() < 0.42) lamp(gb, 0.4, 0.4);
+    if (rnd() < 0.15) lamp(gb, -0.4, -0.4);
     if (rnd() < 0.3) bench(gb, -0.36, 0.42, 0.2);
   },
 

@@ -36,7 +36,8 @@ npm run preview  # sirve dist/
 - **Compartir** copia un enlace con el pueblo dentro (el estado va en el `#` de la URL, sin servidor);
   **Postal** descarga el diorama en PNG; **Guía** lista los 52 hallazgos; **Pueblos** guarda tres
   partidas en el navegador para volver a ellas; **Foto** esconde la interfaz (Esc sale); **Sonido**
-  enciende el viento y las gaviotas; **Ciclo** pone el día y la noche en marcha.
+  enciende el viento y las gaviotas; **Ciclo** pone el día y la noche en marcha; **Estación** da la
+  vuelta al año y **Lugar real** dibuja un barrio de OpenStreetMap en el tablero.
 - Al entrar por primera vez sale una tarjeta con las cuatro reglas del juego, y no vuelve a salir.
 - Caminos y muelles se pueden poner **sobre el agua**: un camino sobre el agua es un puente.
 - El pueblo se guarda solo en `localStorage` y se recupera al volver.
@@ -171,6 +172,26 @@ un piso, y una muralla junta convierte un rincón en fortaleza: todo se intercon
   ventanas, los faroles y la fragua. Con `?hora=0.7` arranca de noche; con el botón **Ciclo** se
   puede dejar siempre de día.
 
+## Las cuatro estaciones
+
+El botón **Estación** da la vuelta al año, y con él cambia el pueblo entero sin perder nada de lo que
+has construido:
+
+| | Árboles | Suelo | Tiempo |
+|---|---|---|---|
+| Primavera | verdes claros, en flor | verde fresco | pétalos que caen |
+| Verano | verdes plenos | verde seco y dorado | nada: cielo limpio |
+| Otoño | cobre, ámbar y ocre | rastrojo | hojas que caen |
+| Invierno | desnudos, con la copa de nieve | casi blanco | nieve |
+
+Cada estación es una tabla en `src/season.ts` con tres tonos de hoja, tres de césped, dos de cosecha y
+un color de partícula. Los árboles, los setos, las huertas y los campos leen esos tonos; el césped de
+la isla se mezcla hacia el color de la estación; y una sola nube de puntos —`weatherMaterial`— hace la
+nieve, los pétalos o las hojas con una llamada de dibujo. En invierno las flores casi no salen.
+
+Se guarda en el navegador y se puede fijar en el enlace con `?estacion=otono`, para mandar un pueblo
+en otoño. La primera visita entra en la estación del mes.
+
 ## Cómo está montado
 
 | Archivo | Qué hace |
@@ -181,7 +202,10 @@ un piso, y una muralla junta convierte un rincón en fortaleza: todo se intercon
 | `src/geo.ts` | acumula primitivas en una geometría con color por vértice y recoge las luces |
 | `src/buildings.ts` | los 62 roles en 3D: palacios, castillos, invernaderos, viñedos, cuadras, muelles, árboles que crecen |
 | `src/materials.ts` | tres tonos planos (sin rayado), agua con oleaje suave, humo y luces; `uDusk` mueve todo al atardecer |
-| `src/life.ts` | gente articulada, gatos, perros, palomas, globo aerostático, barcos con estela, gaviotas, humo |
+| `src/life.ts` | gente articulada, gatos, perros, palomas, globo aerostático, barcos con estela, gaviotas, humo, tiempo |
+| `src/season.ts` | las cuatro estaciones: tonos de hoja, césped y cosecha, y qué cae del cielo |
+| `src/place.ts` | un barrio de OpenStreetMap: buscar el sitio, pedir el mapa y decidir cada casilla |
+| `src/placeui.ts` | la ventana de "Lugar real": dirección, tamaño, ubicación y resultados |
 | `src/share.ts` | el pueblo en un enlace (`#p=semilla.xzkN…`), con altura y giro de cada bloque; lo valida al cargar |
 | `src/scene.ts` | cámara, isla con su bioma y sus hierbas, agua, sombras, reconstrucción, ciclo de luz y postal |
 | `src/guide.ts` | la guía de hallazgos |
@@ -268,33 +292,34 @@ Lo medido en un pueblo de unos cien bloques, con la ventana quieta:
 Lo que queda en ~300 llamadas es la vida: cada caminante son seis piezas y cada quieto cuatro. Es el
 siguiente sitio donde apretar, fusionando brazos y piernas de los que no andan.
 
-## Lo que tomamos de Pocket City
+## Un barrio de verdad
 
-En `~/Downloads/pocket-city` está la skill **Pocket City** de April Zhu
-(<https://april-zhu.com/pocketcity>): dibuja un trozo real de ciudad en isométrico, en una sola página
-HTML. Es otro motor (Canvas 2D con polígonos proyectados) y otra idea (importar un lugar de
-OpenStreetMap), pero la misma mirada de diorama dibujado a mano. Su licencia es PolyForm
-Noncommercial 1.0.0: vale para proyectos no comerciales citándola.
+**Lugar real** dibuja el pueblo sobre un trozo de mapa auténtico: escribes una dirección, o le dices
+que use tu ubicación, y el juego pide los datos a OpenStreetMap. El cuadrado que elijas (250, 400,
+600 o 900 m) se parte en las quince por quince casillas del tablero y cada casilla mira qué hay ahí:
 
-Lo que ya está traído a three.js:
-
-| Del kit | Aquí |
+| En el mapa | En el juego |
 |---|---|
-| Tres tonos planos por cara; la luz hacia crema, la sombra hacia violeta | `inkMaterial`, el sombreado de todo el diorama |
-| Suelo de manchas, nunca una cuadrícula | el césped por campo de ruido y las losas irregulares (`patch`) |
-| Pavimento de piedras irregulares sobre argamasa | `plaza`, `street` y `quay` |
-| Figuras de tres tonos, con ropa y pelo de verdad | `life.ts` |
+| agua, río, canal, costa | casilla de agua: la isla toma la forma de la orilla |
+| un edificio, con sus plantas | una casa de una a tres alturas, girada como su fachada |
+| una calle, una senda | un camino |
+| parque, jardín, bosque | árboles; huerta, viña o labor | campo |
+| una plaza | plaza |
+| un embarcadero | muelle |
 
-Lo que queda por traer, por lo que más se vería:
+Donde el mapa no tiene edificios dibujados pero pasa una calle, el juego pone una parcela: las
+calles y el agua son las de verdad, y las casas que nadie ha mapeado las imagina el juego. El barrio
+sale jugable desde el primer clic, y desde ahí lo cambias como cualquier otro pueblo.
 
-1. **Estaciones**: hojas, nieve en los tejados, ropa de abrigo, pétalos y hojas cayendo. El kit lo
-   resuelve con una tabla de paletas por especie y un puñado de partículas.
-2. **Catálogo de fachadas**: contraventanas, toldos, rótulos, cornisas, balcones, arcos. La anatomía
-   de cada tipo de edificio está en `references/research.md`.
-3. **Árboles por especie**: siete formas con sus proporciones (dónde bifurca el tronco, qué ancho
-   tiene la copa, si es de vaso), en vez de bolas de verde.
-4. **Lugares reales**: `fetch_osm.py`, `plot.py` y `prep.py` convierten una calle de OpenStreetMap en
-   un `scene.json`; de ahí saldrían semillas con la trama de una ciudad de verdad.
+El enlace guarda el sitio (`?sitio=lat,lon,ancho&lugar=nombre`), así que se puede compartir un barrio
+concreto; al abrirlo se vuelve a pedir el mapa. La última copia queda en el navegador, de modo que el
+barrio se abre aunque los servidores públicos estén caídos —que lo están a menudo—. Los datos son
+**© OpenStreetMap contributors**, con licencia ODbL: por eso la ventana lo dice y el mapa se pide
+solo para dibujar.
+
+El código está en `src/place.ts` (buscar el sitio, pedir el mapa, decidir cada casilla) y
+`src/placeui.ts` (la ventana). Las consultas van con menos de diez cláusulas, dos espejos y dos
+rondas de espera: los servidores gratuitos devuelven «at capacity» a la primera de cambio.
 
 ## Publicarlo en abierto
 
@@ -329,7 +354,7 @@ una URL pública al momento. También vale `npx vercel --prod` o `npx netlify de
 ## Qué falta respecto a la referencia
 
 1. Contenido: la referencia tiene 102 edificios especiales con guía; aquí hay 52.
-2. Estaciones y clima: nieve, lluvia, fiestas y mercado con puestos que se montan.
+2. Clima de verdad: lluvia con charcos, tormenta y mercado con puestos que se montan.
 3. Objetos narrados: alguien llevando pan del horno al puesto, barcos que cargan y descargan.
 4. Una galería de postales (los pueblos guardados ya están, en tres huecos).
 5. PWA instalable y modo sin conexión; la guía como páginas estáticas con su propia URL.

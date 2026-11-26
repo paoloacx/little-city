@@ -56,7 +56,8 @@ export function decodeTown(payload: string): Town | null {
 }
 
 export function shareUrl(payload: string): string {
-  return `${location.origin}${location.pathname}${HASH}${payload}`;
+  // The query carries the season and, if any, the real place: keep it.
+  return `${location.origin}${location.pathname}${location.search}${HASH}${payload}`;
 }
 
 /** Reads a town out of the address bar, if there is one. */
