@@ -325,6 +325,15 @@ export function resolveTown(town: Town, mask: boolean[][]): Map<string, Resolved
       if (wall(1, 0)) links |= LINK_E;
       if (wall(0, 1)) links |= LINK_S;
       if (wall(-1, 0)) links |= LINK_W;
+    } else if (placed.kind === 'path') {
+      // A lane knows which way it runs, so it can be drawn as one road: no kerbs
+      // across the way it carries on, and wheel ruts along it.
+      const road = (dx: number, dz: number): boolean =>
+        town.blocks.get(key(x + dx, z + dz))?.kind === 'path';
+      if (road(0, -1)) links |= LINK_N;
+      if (road(1, 0)) links |= LINK_E;
+      if (road(0, 1)) links |= LINK_S;
+      if (road(-1, 0)) links |= LINK_W;
     }
     out.set(k, {
       role: rule ? rule.role : BASE_ROLE[placed.kind],

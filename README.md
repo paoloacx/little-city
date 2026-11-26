@@ -192,11 +192,36 @@ nieve, los pétalos o las hojas con una llamada de dibujo. En invierno las flore
 Se guarda en el navegador y se puede fijar en el enlace con `?estacion=otono`, para mandar un pueblo
 en otoño. La primera visita entra en la estación del mes.
 
+## La isla: colinas, ríos, bosques y caminos
+
+La isla no es un mantel: el terreno ondula, el agua entra tierra adentro y el bosque tiene especies.
+
+- **Colinas.** Un campo de ruido lento (`driftField`, escala 2,6 casillas) decide la altura de cada
+  casilla: cero, un escalón o dos, de cinco centímetros cada uno. Donde el vecino es más bajo se
+  levantan las caras del escalón —un labio de hierba y el talud de tierra debajo—, así que el suelo se
+  lee como una ladera dibujada y no como una losa. Los edificios se posan **encima** del escalón: una
+  casa en una loma queda más alta, y la gente que pasa por delante sube y baja con el terreno.
+  Las terrazas van en su propia malla y **sin el pase de tinta**: el *hull* invertido alrededor de un
+  panel de cinco centímetros pintaba una banda negra en cada escalón.
+- **Ríos y lagos.** La mitad de las islas llevan agua por dentro: un río que entra por la costa, serpentea
+  y acaba en una laguna, o una laguna en un hueco. El agua de dentro corre **trece centímetros por
+  debajo de la hierba**, no a nivel del mar: es un arroyo que se salta, no un cañón. La orilla lleva su
+  labio de hierba y el talud, juncos y alguna piedra o nenúfar; donde el arroyo llega al mar hay un
+  **salto de agua**. Si el río se comiera demasiada tierra, o dejara un rincón de la isla aislado, se
+  descarta y la isla queda entera: el pueblo siempre cabe.
+- **Bosques.** Cuatro especies, elegidas por la semilla de cada casilla: **roble** (copa redonda y
+  ancha), **chopo** (esbelto, con el tronco a la vista), **pino** (pisos de agujas, el de arriba
+  iluminado) y **ciprés** (una vela estrecha y oscura). Cada clic sigue haciéndolos crecer; en invierno
+  los pinos y cipreses se quedan verdes con la nieve encima.
+- **Caminos.** Cada calle mira a sus vecinas: los lados por los que sigue **no llevan bordillo**, así
+  que una calle de cinco casillas se ve como una sola calle y no como cinco losas. Por donde corre
+  lleva dos **rodadas** de carro, y en los bordes, bordillo de piedra y su sombra.
+
 ## Cómo está montado
 
 | Archivo | Qué hace |
 |---|---|
-| `src/grid.ts` | rejilla, isla procedural (semilla), bloques con nivel, guardado en `localStorage` |
+| `src/grid.ts` | rejilla, isla procedural (semilla, con ríos y lagos), bloques con nivel, guardado en `localStorage` |
 | `src/rules.ts` | hechos de cada casilla (vecinos, agua, nivel, altura de alrededor) y 52 reglas ordenadas |
 | `src/grow.ts` | el generador de "crecer un pueblo": plaza, calles, callejón, castillo, granja, puerto |
 | `src/geo.ts` | acumula primitivas en una geometría con color por vértice y recoge las luces |
@@ -207,7 +232,7 @@ en otoño. La primera visita entra en la estación del mes.
 | `src/place.ts` | un barrio de OpenStreetMap: buscar el sitio, pedir el mapa y decidir cada casilla |
 | `src/placeui.ts` | la ventana de "Lugar real": dirección, tamaño, ubicación y resultados |
 | `src/share.ts` | el pueblo en un enlace (`#p=semilla.xzkN…`), con altura y giro de cada bloque; lo valida al cargar |
-| `src/scene.ts` | cámara, isla con su bioma y sus hierbas, agua, sombras, reconstrucción, ciclo de luz y postal |
+| `src/scene.ts` | cámara, isla con su bioma, sus colinas y su agua, sombras, reconstrucción, ciclo de luz y postal |
 | `src/guide.ts` | la guía de hallazgos |
 | `src/intro.ts` | la tarjeta de bienvenida, que se muestra una sola vez |
 | `src/saves.ts` | tres pueblos guardados en `localStorage`, con su fecha y sus hallazgos |
@@ -236,6 +261,15 @@ en otoño. La primera visita entra en la estación del mes.
 - El empedrado de plazas y caminos son polígonos irregulares (`patch`, seis formas) sobre un lecho
   de argamasa oscura, con las juntas al azar: una losa nunca es un cuadrado. La calle es tierra
   apisonada con manchas de desgaste, no una cruz de losas claras.
+- El agua de dentro y el mar **no pueden ser la misma superficie**: bajar el río al nivel del mar lo
+  convertía en un tajo de cuarenta y cinco centímetros. Se marca en `grid.ts` qué celdas son río
+  (`isChannel`, en un `WeakMap` sobre la máscara) y la escena dibuja su propia lámina trece
+  centímetros bajo la hierba, con su lecho y su salto. Una celda de agua tallada que todavía toca el
+  mar es la boca y se queda a nivel del mar: ahí cae el agua.
+- Un río de una casilla que avanza en diagonal solo toca el agua por un pico: se talla también la
+  casilla de la esquina, o el río sale partido en dos. Y antes de aceptar el tallado se comprueba con
+  un relleno que toda la tierra siga siendo alcanzable a pie (`whole`), porque un rincón suelto deja
+  calles y gente en un islote al que no llega nadie.
 - Los **molinos** eran tres tambores colocados a alturas fijas: con dos o tres pisos quedaban huecos
   entre ellos y las aspas salían flotando. Ahora son dos tambores troncocónicos que se solapan, con la
   galería en la junta, el capó sobre el último y las aspas en un eje que sale del muro.

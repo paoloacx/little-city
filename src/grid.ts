@@ -108,7 +108,149 @@ export function makeIsland(seed: number): boolean[][] {
     }
     mask.push(row);
   }
-  return mask;
+  return carveWater(mask, seed);
+}
+
+/**
+ * The water cut inland sits a little above the sea, so a river is a stream you
+ * step over instead of a canyon: the scene needs to tell one from the other.
+ */
+const inlandWater = new WeakMap<boolean[][], boolean[][]>();
+
+/** True when this water is a river or a lake, not the sea around the island. */
+export function isChannel(mask: boolean[][], x: number, z: number): boolean {
+  if (x < 0 || z < 0 || x >= GRID || z >= GRID) return false;
+  return inlandWater.get(mask)?.[z]?.[x] ?? false;
+}
+
+/**
+ * Rivers and lakes, cut out of the drawn island: sometimes a river comes in from
+ * the sea and ends in a tarn, sometimes only the tarn, sometimes nothing. If the
+ * water takes too much land the plain island stays, so a town always fits.
+ */
+function carveWater(mask: boolean[][], seed: number): boolean[][] {
+  const random = rng((seed ^ 0x2f7d92a3) >>> 0);
+  const out = mask.map((row) => [...row]);
+  const sea = mask.map((row) => row.map((land) => !land));
+  const cut: boolean[][] = out.map((row) => row.map(() => false));
+  const dry = (x: number, z: number): boolean => x >= 0 && z >= 0 && x < GRID && z < GRID && out[z][x];
+  const landCount = (): number => out.reduce((n, row) => n + row.filter(Boolean).length, 0);
+  const before = landCount();
+  const dig = (x: number, z: number): void => {
+    if (x < 0 || z < 0 || x >= GRID || z >= GRID) return;
+    out[z][x] = false;
+    cut[z][x] = true;
+  };
+
+  if (random() < 0.55) {
+    // A river: it comes in from the sea at one edge, wanders inland and ends in
+    // a tarn. The island border is water already, so it starts at the shore.
+    const edge = Math.floor(random() * 4);
+    const lane = Math.floor(random() * (GRID - 6)) + 3;
+    let x = edge === 0 ? lane : edge === 1 ? lane : edge === 2 ? 0 : GRID - 1;
+    let z = edge === 0 ? 0 : edge === 1 ? GRID - 1 : lane;
+    const dx = edge === 2 ? 1 : edge === 3 ? -1 : 0;
+    const dz = edge === 0 ? 1 : edge === 1 ? -1 : 0;
+    for (let guard = 0; guard < 6 && !dry(x, z); guard++) {
+      x += dx;
+      z += dz;
+    }
+    if (!dry(x, z)) {
+      // No shore on that line: fall through to a tarn instead.
+    } else {
+      // Cut through the beach, so the stream really opens into the sea.
+      for (let bx = x - dx, bz = z - dz; bx >= 0 && bz >= 0 && bx < GRID && bz < GRID && dry(bx, bz); bx -= dx, bz -= dz) dig(bx, bz);
+      const length = 4 + Math.floor(random() * 4);
+      // A cell the stream may still take: inland, and still land.
+      const ahead = (cx: number, cz: number): boolean =>
+        cx >= 1 && cz >= 1 && cx <= GRID - 2 && cz <= GRID - 2 && dry(cx, cz);
+      for (let step = 0; step < length; step++) {
+        dig(x, z);
+        // Wider at the mouth, so it reads as an estuary.
+        if (step === 0) dig(x + (dz !== 0 ? 1 : 0), z + (dx !== 0 ? 1 : 0));
+        if (!ahead(x + dx, z + dz)) break;
+        x += dx;
+        z += dz;
+        // The step ahead is always cut, and the drift is cut from there: water
+        // that only touched at a point would leave the stream broken in two.
+        dig(x, z);
+        if (random() < 0.6) {
+          const side = random() < 0.5 ? 1 : -1;
+          const sx = x + (dx !== 0 ? 0 : side);
+          const sz = z + (dz !== 0 ? 0 : side);
+          if (ahead(sx, sz)) {
+            dig(sx, sz);
+            x = sx;
+            z = sz;
+          }
+        }
+      }
+      // The tarn at the end of it.
+      for (let ox = 0; ox < 2; ox++) {
+        for (let oz = 0; oz < 2; oz++) {
+          if (random() < 0.8) dig(x + ox - 1, z + oz - 1);
+        }
+      }
+    }
+  } else if (random() < 0.6) {
+    // A tarn in a hollow, two or three cells wide.
+    const cx = Math.floor(random() * 6) + 5;
+    const cz = Math.floor(random() * 6) + 5;
+    for (let ox = -1; ox <= 1; ox++) {
+      for (let oz = -1; oz <= 1; oz++) {
+        if (Math.abs(ox) + Math.abs(oz) > 1 && random() < 0.7) continue;
+        dig(cx + ox, cz + oz);
+      }
+    }
+  }
+
+  // Never drown the town, and never cut a corner of land adrift: the grown town
+  // would put lanes and people on an islet nobody can reach.
+  if (landCount() < Math.max(52, Math.round(before * 0.68)) || !whole(out)) return mask;
+
+  // A cut cell that still touches the sea is the mouth: the water steps down
+  // there, so it keeps the sea level and the scene draws the little fall.
+  const channel = cut.map((row, z) =>
+    row.map((dug, x) => {
+      if (!dug) return false;
+      for (const [nx, nz] of [
+        [x + 1, z],
+        [x - 1, z],
+        [x, z + 1],
+        [x, z - 1],
+      ]) {
+        if (nx < 0 || nz < 0 || nx >= GRID || nz >= GRID) continue;
+        if (sea[nz][nx]) return false;
+      }
+      return true;
+    }),
+  );
+  inlandWater.set(out, channel);
+  return out;
+}
+
+/** True when every land tile can be walked to from every other one. */
+function whole(mask: boolean[][]): boolean {
+  let start: [number, number] | null = null;
+  let land = 0;
+  for (let z = 0; z < GRID; z++) {
+    for (let x = 0; x < GRID; x++) {
+      if (!mask[z][x]) continue;
+      land++;
+      start ??= [x, z];
+    }
+  }
+  if (!start) return false;
+  const seen = new Set<string>();
+  const stack: Array<[number, number]> = [start];
+  while (stack.length) {
+    const [x, z] = stack.pop() as [number, number];
+    const k = key(x, z);
+    if (seen.has(k) || !landAt(mask, x, z)) continue;
+    seen.add(k);
+    stack.push([x + 1, z], [x - 1, z], [x, z + 1], [x, z - 1]);
+  }
+  return seen.size === land;
 }
 
 export function landAt(mask: boolean[][], x: number, z: number): boolean {

@@ -1,7 +1,7 @@
 /** The diorama: renderer, camera, island, water, the town built on top, and the light of day. */
 
 import * as THREE from 'three';
-import { GRID, HALF, Town, isShore, landAt, makeIsland, rng, worldX, worldZ } from './grid';
+import { GRID, HALF, Town, isChannel, key as gridKey, landAt, makeIsland, rng, worldX, worldZ } from './grid';
 import { GeoBuilder, Light, blob, cone, cube, mixHex, panel, patch, post, quad } from './geo';
 import { Resolved, resolveTown } from './rules';
 import { buildRole } from './buildings';
@@ -29,6 +29,11 @@ const pickHit = new THREE.Vector3();
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 /** One day and one night. */
 const CYCLE = 210;
+/** How much the ground rises at each hill terrace. */
+const HILL_STEP = 0.05;
+/** Inland water runs just under the grass: a stream you can step over. */
+const RIVER_Y = -0.13;
+const RIVER_BED = -0.23;
 
 /**
  * A slow field over the island: neighbouring tiles get nearly the same tone, so
@@ -174,6 +179,10 @@ export class World {
   private seed = 1;
   /** A real coastline laid over the drawn one, when a place is loaded. */
   private island: boolean[][] | null = null;
+  /** Slow field that decides where the ground rolls, cell by cell. */
+  private hills: (x: number, z: number) => number = () => 0;
+  /** The same slow field the grass tone uses, so a hill matches its ground. */
+  private grass: (x: number, z: number) => number = () => 0;
   private disposed = false;
 
   readonly cam: CameraState = { azimuth: 0.72, elevation: 0.6, distance: 22 };
@@ -203,11 +212,18 @@ export class World {
     this.ghost.add(this.ghostBox, this.ghostPad);
 
     this.buildWater();
+    // People, cats and dogs stand on the ground the hills give them.
+    this.life.ground = (wx, wz) => this.hillLevel(this.worldCell(wx), this.worldCell(wz)) * HILL_STEP;
     this.applyCamera();
     this.resize();
 
     window.addEventListener('resize', () => this.resize());
     this.renderer.setAnimationLoop(() => this.frame());
+  }
+
+  /** A world coordinate back to its cell, for the things that live between tiles. */
+  private worldCell(w: number): number {
+    return Math.round(w + HALF);
   }
 
   get islandMask(): boolean[][] {
@@ -254,6 +270,8 @@ export class World {
     const gb = new GeoBuilder();
     const random = rng(seed ^ 0x9e3779b9);
     const drift = driftField(seed ^ 0x2545f491, 4.5);
+    this.grass = drift;
+    this.hills = driftField(seed ^ 0x5bd1e995, 2.6);
     const season = getSeason();
     const tones = this.biome.grass;
     for (let z = 0; z < GRID; z++) {
@@ -261,12 +279,25 @@ export class World {
         if (!landAt(this.mask, x, z)) continue;
         const wx = worldX(x) * TILE;
         const wz = worldZ(z) * TILE;
-        const shore = isShore(this.mask, x, z);
+        // Water at the edge of the island is the sea; water cut inland is a river
+        // or a lake, and its bank is a low grassy lip, not a sandy cliff.
+        const waterSides: Array<[number, number, boolean]> = [];
+        for (const [dx, dz] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ] as Array<[number, number]>) {
+          if (landAt(this.mask, x + dx, z + dz)) continue;
+          waterSides.push([dx, dz, isChannel(this.mask, x + dx, z + dz)]);
+        }
+        const shore = waterSides.length > 0;
+        const coast = waterSides.some((side) => !side[2]);
         // A tone taken from the drift, so a tile is never its own colour.
         const g = Math.min(drift(x, z) * tones.length, tones.length - 1.0001);
         const near = Math.floor(g);
         const grass = mixHex(mixHex(tones[near], tones[near + 1] ?? tones[near], g - near), season.grass[0], season.grass[1]);
-        const top = shore ? this.biome.sand : grass;
+        const top = coast ? this.biome.sand : grass;
         gb.add(quad(), top, [wx, 0, wz], [0, 0, 0], [TILE, 1, TILE]);
 
         // Two irregular patches, barely a tint apart: they break the tile grid
@@ -284,16 +315,29 @@ export class World {
           }
         }
 
-        const sides: Array<[number, number]> = [];
-        if (!landAt(this.mask, x + 1, z)) sides.push([1, 0]);
-        if (!landAt(this.mask, x - 1, z)) sides.push([-1, 0]);
-        if (!landAt(this.mask, x, z + 1)) sides.push([0, 1]);
-        if (!landAt(this.mask, x, z - 1)) sides.push([0, -1]);
-
-        for (const [dx, dz] of sides) {
+        for (const [dx, dz, channel] of waterSides) {
           const cx = wx + (dx * TILE) / 2;
           const cz = wz + (dz * TILE) / 2;
           const rotY = dx !== 0 ? (dx > 0 ? Math.PI / 2 : -Math.PI / 2) : dz > 0 ? 0 : Math.PI;
+          if (channel) {
+            // A stream bank: grass overhanging a strip of wet earth.
+            const lip = 0.06;
+            const wall = -RIVER_BED - lip;
+            gb.add(panel(), mixHex(grass, this.biome.earth, 0.45), [cx, -lip / 2, cz], [0, rotY, 0], [TILE, lip, 1]);
+            // Wet moss rather than sand: a tan band around a pond reads as a pit.
+            gb.add(panel(), mixHex(grass, 0x4c5c3d, 0.55), [cx, -lip - wall / 2, cz], [0, rotY, 0], [TILE, wall, 1]);
+            // Reeds along the water: the bank of a stream is never bare.
+            const reeds = 2 + Math.floor(random() * 3);
+            for (let r = 0; r < reeds; r++) {
+              const along = (random() - 0.5) * 0.8;
+              const rx = cx + (dx === 0 ? along : dx * 0.05) + (random() - 0.5) * 0.05;
+              const rz = cz + (dz === 0 ? along : dz * 0.05) + (random() - 0.5) * 0.05;
+              const blade = 0.06 + random() * 0.06;
+              const tone = season.bare ? mixHex(0xa8b06a, 0xe8ecef, 0.45) : mixHex(0x7d9a5c, 0x9fb46a, random());
+              gb.add(cone(), tone, [rx, -0.02, rz], [0.08 * (random() - 0.5), 0, 0.1 * (random() - 0.5)], [0.024, blade, 0.024]);
+            }
+            continue;
+          }
           // Sandy lip at the top, darker earth under it.
           gb.add(panel(), this.biome.sandDeep, [cx, -0.11, cz], [0, rotY, 0], [TILE, 0.22, 1]);
           gb.add(panel(), this.biome.earth, [cx, -0.43, cz], [0, rotY, 0], [TILE, 0.42, 1]);
@@ -301,7 +345,46 @@ export class World {
         }
 
         // The small stuff that makes a diorama feel drawn: each island has its own.
-        this.scatter(gb, wx, wz, shore, random);
+        // A terrace hides whatever grows under it, so it is left bare.
+        if (this.hillLevel(x, z) === 0 || shore) this.scatter(gb, wx, wz, shore && coast, random);
+      }
+    }
+
+    // Rivers and lakes: a bed, the water just below the grass, and a little fall
+    // wherever the inland water reaches the sea.
+    const channels = new GeoBuilder();
+    for (let z = 0; z < GRID; z++) {
+      for (let x = 0; x < GRID; x++) {
+        if (landAt(this.mask, x, z) || !isChannel(this.mask, x, z)) continue;
+        const wx = worldX(x) * TILE;
+        const wz = worldZ(z) * TILE;
+        const randomCell = rng((seed * 4409 + x * 277 + z * 53) >>> 0);
+        gb.add(quad(), mixHex(this.biome.earthDeep, 0x4f5b52, 0.45), [wx, RIVER_BED, wz], [0, 0, 0], [TILE, 1, TILE]);
+        // Reeds and a stone or two on the bed, so the water has a floor.
+        if (randomCell() < 0.5) {
+          gb.add(blob(), this.biome.rock, [wx + (randomCell() - 0.5) * 0.5, RIVER_BED + 0.02, wz + (randomCell() - 0.5) * 0.5], [0, randomCell() * 3, 0], [0.11, 0.05, 0.1]);
+        }
+        channels.add(quad(), 0xffffff, [wx, RIVER_Y, wz], [0, 0, 0], [TILE * 1.002, 1, TILE * 1.002]);
+        // A lily pad or two, floating just under the water line.
+        if (randomCell() < 0.22) {
+          gb.add(blob(), mixHex(0x6f9a52, 0x3f6b45, 0.35), [wx + (randomCell() - 0.5) * 0.4, RIVER_Y + 0.008, wz + (randomCell() - 0.5) * 0.4], [0, randomCell() * 3, 0], [0.13, 0.012, 0.11]);
+        }
+        // Where a cell of the stream touches the sea, the water drops.
+        for (const [dx, dz] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ] as Array<[number, number]>) {
+          if (landAt(this.mask, x + dx, z + dz) || isChannel(this.mask, x + dx, z + dz)) continue;
+          const cx = wx + (dx * TILE) / 2;
+          const cz = wz + (dz * TILE) / 2;
+          const rotY = dx !== 0 ? (dx > 0 ? Math.PI / 2 : -Math.PI / 2) : dz > 0 ? 0 : Math.PI;
+          gb.add(panel(), 0xcfe0dd, [cx, (RIVER_Y + WATER_Y) / 2, cz], [0, rotY, 0], [TILE, RIVER_Y - WATER_Y, 1]);
+          for (let i = 0; i < 3; i++) {
+            gb.add(blob(), 0xe8f1ee, [cx + (randomCell() - 0.5) * 0.5, WATER_Y + 0.02 + i * 0.008, cz + (randomCell() - 0.5) * 0.3], [0, 0, 0], [0.16 - i * 0.03, 0.02, 0.1]);
+          }
+        }
       }
     }
 
@@ -313,7 +396,16 @@ export class World {
     const ink = new THREE.Mesh(geometry, this.outline);
     ink.frustumCulled = false;
     this.terrain.add(ink);
-    this.terrain.userData.geometries = new Set([geometry]);
+    const owned = new Set([geometry]);
+    const river = channels.build();
+    if (river) {
+      const sheet = new THREE.Mesh(river, this.water);
+      sheet.frustumCulled = false;
+      sheet.renderOrder = -1;
+      this.terrain.add(sheet);
+      owned.add(river);
+    }
+    this.terrain.userData.geometries = owned;
   }
 
   /**
@@ -331,7 +423,7 @@ export class World {
     // would come out as a black stroke, and a pale cone reads as a stray mark.
     const tuft = (x: number, z: number, scale = 1): void => {
       const turn = random() * 3;
-      const tone = season.bare ? mixHex(0x6f9a52, 0xe8ecef, 0.6) : b.name === 'bosque' ? 0x5f7f4a : 0x6f9a52;
+      const tone = season.bare ? mixHex(0x6f9a52, 0xe8ecef, 0.86) : b.name === 'bosque' ? 0x5f7f4a : 0x6f9a52;
       gb.add(blob(), tone, [x, 0.045 * scale, z], [0, turn, 0.2], [0.17 * scale, 0.1 * scale, 0.17 * scale]);
       gb.add(blob(), tone, [x + 0.06 * scale, 0.035 * scale, z - 0.05 * scale], [0, turn + 1, -0.2], [0.11 * scale, 0.08 * scale, 0.11 * scale]);
     };
@@ -431,6 +523,20 @@ export class World {
     }
   }
 
+  /** How high the ground stands on a cell: zero, one step or two. */
+  private hillLevel(x: number, z: number): number {
+    const rise = this.hills(x, z);
+    return rise < 0.54 ? 0 : rise < 0.72 ? 1 : 2;
+  }
+
+  /** The colour the island's grass has on this cell, hills included. */
+  private grassTone(x: number, z: number): number {
+    const tones = this.biome.grass;
+    const g = Math.min(this.grass(x, z) * tones.length, tones.length - 1.0001);
+    const near = Math.floor(g);
+    return mixHex(mixHex(tones[near], tones[near + 1] ?? tones[near], g - near), getSeason().grass[0], getSeason().grass[1]);
+  }
+
   /** Rebuilds the buildings that changed, then merges them into a few draws. */
   rebuild(town: Town): Map<string, Resolved> {
     const started = performance.now();
@@ -440,6 +546,7 @@ export class World {
     const resolved = resolveTown(town, this.mask);
     this.clearGroup(this.townGroup);
     const parts: THREE.BufferGeometry[] = [];
+    const mounds: THREE.BufferGeometry[] = [];
     const shadows: THREE.BufferGeometry[] = [];
     const lights: Light[] = [];
     const matrix = new THREE.Matrix4();
@@ -464,12 +571,14 @@ export class World {
           ? landAt(this.mask, cell.x, cell.z - 1) || landAt(this.mask, cell.x, cell.z + 1)
             ? Math.PI / 2
             : 0
-          : cell.block === 'wall'
+          : cell.block === 'wall' || cell.block === 'path'
             ? cell.links === 0
               ? (cell.rot * Math.PI) / 2
+              // A wall or a lane that joins its neighbours draws its own arms
+              // in world directions: turning the tile would break the run.
               : 0
             : (cell.rot * Math.PI) / 2 + jitter;
-      const baseY = onWater && cell.role === 'dock' ? WATER_Y : 0;
+      const baseY = onWater && cell.role === 'dock' ? WATER_Y : this.hillLevel(cell.x, cell.z) * HILL_STEP;
       const season = getSeason();
       const wx = worldX(cell.x) * TILE;
       const wz = worldZ(cell.z) * TILE;
@@ -520,6 +629,89 @@ export class World {
       for (const light of cached.lights) lights.push(light);
     }
 
+    // Rolling ground: the hill field lifts a cell one or two steps, and the sides
+    // of the step are drawn only where the neighbour is lower. It is cached like
+    // any other tile, so a building on a hill sits on top of it.
+    for (let z = 0; z < GRID; z++) {
+      for (let x = 0; x < GRID; x++) {
+        if (!landAt(this.mask, x, z)) continue;
+        const at = gridKey(x, z);
+        const built = resolved.has(at);
+        const level = this.hillLevel(x, z);
+        if (level === 0) continue;
+        const sides = [
+          landAt(this.mask, x, z + 1) ? this.hillLevel(x, z + 1) : 0,
+          landAt(this.mask, x, z - 1) ? this.hillLevel(x, z - 1) : 0,
+          landAt(this.mask, x + 1, z) ? this.hillLevel(x + 1, z) : 0,
+          landAt(this.mask, x - 1, z) ? this.hillLevel(x - 1, z) : 0,
+        ];
+        const moundKey = `hill:${at}`;
+        const sig = `${level}|${sides.join('')}|${built}`;
+        alive.add(moundKey);
+        let entry = this.cellCache.get(moundKey);
+        if (entry && entry.sig !== sig) {
+          entry.geometry.dispose();
+          entry.shadow?.dispose();
+          this.cellCache.delete(moundKey);
+          entry = undefined;
+        }
+        if (!entry) {
+          const gb = new GeoBuilder();
+          const random = rng((this.seed * 6151 + x * 197 + z * 31) >>> 0);
+          // Not perfectly level: a millimetre of wobble keeps the crowns from
+          // reading as a sheet of glass laid over the field.
+          const h = level * HILL_STEP + (random() - 0.5) * 0.014;
+          const tone = this.grassTone(x, z);
+          const lipTone = mixHex(tone, this.biome.earth, 0.3);
+          const wallTone = mixHex(tone, 0x6f7f5a, 0.5);
+          // The crown is drawn even under a building: a block does not always
+          // cover its tile, and a missing floor would be a hole into the dark.
+          gb.add(quad(), tone, [0, built ? h - 0.004 : h, 0], [0, 0, 0], [TILE, 1, TILE]);
+          if (!built) {
+            // A few tufts on the crown, so a hill has something growing on it.
+            const tufts = 1 + Math.floor(random() * 2);
+            // Snow covers the hill too: a green tuft on a white crown is a bug.
+            const tuftTone = getSeason().bare ? mixHex(0x9aae94, 0xeef2f4, 0.72) : mixHex(0x6f9a52, tone, 0.35);
+            for (let i = 0; i < tufts; i++) {
+              const angle = random() * Math.PI * 2;
+              const reach = 0.12 + random() * 0.22;
+              gb.add(blob(), tuftTone, [Math.cos(angle) * reach, h + 0.03, Math.sin(angle) * reach], [0, random() * 3, 0.2], [0.15, 0.09, 0.15]);
+            }
+            if (random() < 0.4) {
+              const angle = random() * Math.PI * 2;
+              gb.add(blob(), this.biome.pebble, [Math.cos(angle) * 0.24, h + 0.025, Math.sin(angle) * 0.24], [0, random() * 3, 0], [0.09, 0.06, 0.09]);
+            }
+          }
+          const faces: Array<[number, number, number]> = [
+            [0, h, 0.5 * TILE],
+            [0, h, -0.5 * TILE],
+            [0.5 * TILE, h, 0],
+            [-0.5 * TILE, h, 0],
+          ];
+          const turns = [0, Math.PI, Math.PI / 2, -Math.PI / 2];
+          for (let i = 0; i < 4; i++) {
+            const low = sides[i] * HILL_STEP;
+            if (low >= h - 0.012) continue;
+            const [fx, , fz] = faces[i];
+            // Two bands: a grassy lip at the very top and bare earth under it,
+            // set a hair inwards so the grass overhangs the drop.
+            const lip = 0.03;
+            gb.add(panel(), lipTone, [fx, h - lip / 2, fz], [0, turns[i], 0], [TILE, lip, 1]);
+            const wall = h - lip - low;
+            if (wall > 0.004) {
+              gb.add(panel(), mixHex(wallTone, this.biome.earth, 0.25), [fx * 0.985, low + wall / 2, fz * 0.985], [0, turns[i], 0], [TILE, wall, 1]);
+            }
+          }
+          const raw = gb.build();
+          if (!raw) continue;
+          raw.applyMatrix4(new THREE.Matrix4().setPosition(worldX(x) * TILE, 0, worldZ(z) * TILE));
+          entry = { sig, geometry: raw, shadow: null, lights: [] };
+          this.cellCache.set(moundKey, entry);
+        }
+        mounds.push(entry.geometry);
+      }
+    }
+
     // Tiles that are gone take their geometry with them.
     for (const [key, entry] of this.cellCache) {
       if (alive.has(key)) continue;
@@ -530,6 +722,16 @@ export class World {
 
     const owned = new Set<THREE.BufferGeometry>();
     const mergeStarted = performance.now();
+    // The hill terraces go in without the ink pass: an inverted hull around a
+    // panel three centimetres thick paints a black band along every step.
+    const relief = mounds.length ? mergeGeometries(mounds, false) : null;
+    if (relief) {
+      relief.computeBoundingSphere();
+      const mesh = new THREE.Mesh(relief, this.surface);
+      mesh.frustumCulled = false;
+      this.townGroup.add(mesh);
+      owned.add(relief);
+    }
     const merged = parts.length ? mergeGeometries(parts, false) : null;
     if (merged) {
       merged.computeBoundingSphere();

@@ -114,6 +114,12 @@ const OPEN_PLAZAS: ReadonlySet<string> = new Set(['plaza', 'square']);
 
 export class Life {
   readonly group = new THREE.Group();
+  /**
+   * How high the ground stands under a world point. The scene hands this in:
+   * the island is not flat, and a figure on a terrace has to climb it.
+   */
+  ground: (wx: number, wz: number) => number = () => 0;
+
   /** People (walkers and idlers) and the rest (animals, boats, balloon). */
   private readonly peopleGroup = new THREE.Group();
   private readonly propsGroup = new THREE.Group();
@@ -228,7 +234,7 @@ export class Life {
       const figure = this.figure(random, random() < 0.16 ? 0.24 : 0.295 + random() * 0.03);
       if (!figure) continue;
       const tile = path[0];
-      figure.group.position.set(worldX(tile.x), 0, worldZ(tile.z));
+      figure.group.position.set(worldX(tile.x), this.ground(worldX(tile.x), worldZ(tile.z)), worldZ(tile.z));
       figure.group.rotation.y = random() * Math.PI * 2;
       this.peopleGroup.add(figure.group);
       this.walkers.push({
@@ -251,7 +257,9 @@ export class Life {
       if (!figure) continue;
       const around = random() * Math.PI * 2;
       const reach = 0.4 + random() * 0.1;
-      figure.group.position.set(worldX(spot.x) + Math.cos(around) * reach, 0, worldZ(spot.z) + Math.sin(around) * reach);
+      const ix = worldX(spot.x) + Math.cos(around) * reach;
+      const iz = worldZ(spot.z) + Math.sin(around) * reach;
+      figure.group.position.set(ix, this.ground(ix, iz), iz);
       figure.group.rotation.y = random() * Math.PI * 2;
       this.peopleGroup.add(figure.group);
       this.idlers.push({
@@ -274,6 +282,7 @@ export class Life {
       const cat = this.cat(random);
       if (!cat) continue;
       const origin = new THREE.Vector3(worldX(spot.x), 0, worldZ(spot.z));
+      origin.y = this.ground(origin.x, origin.z);
       cat.group.position.copy(origin);
       this.propsGroup.add(cat.group);
       this.cats.push({
@@ -293,6 +302,7 @@ export class Life {
       const dog = this.dog(random);
       if (!dog) continue;
       const origin = new THREE.Vector3(worldX(spot.x), 0, worldZ(spot.z));
+      origin.y = this.ground(origin.x, origin.z);
       dog.group.position.copy(origin);
       this.propsGroup.add(dog.group);
       this.dogs.push({
@@ -325,9 +335,12 @@ export class Life {
       const spot = plazas[Math.floor(random() * plazas.length)];
       const pigeon = this.pigeon(random);
       if (!pigeon) continue;
-      pigeon.position.set(worldX(spot.x) + (random() - 0.5) * 0.7, 0, worldZ(spot.z) + (random() - 0.5) * 0.7);
+      const px = worldX(spot.x) + (random() - 0.5) * 0.7;
+      const pz = worldZ(spot.z) + (random() - 0.5) * 0.7;
+      const py = this.ground(px, pz);
+      pigeon.position.set(px, py, pz);
       this.propsGroup.add(pigeon);
-      this.pigeons.push({ group: pigeon, baseY: 0, phase: random() * 10 });
+      this.pigeons.push({ group: pigeon, baseY: py, phase: random() * 10 });
     }
 
     // Boats: three of them working a slow circle offshore.
@@ -459,9 +472,10 @@ export class Life {
       const bx = worldX(to.x);
       const bz = worldZ(to.z);
       const t = walking ? walker.t : 0;
-      walker.group.position.set(ax + (bx - ax) * t, 0, az + (bz - az) * t);
+      const gy = this.ground(ax, az) * (1 - t) + this.ground(bx, bz) * t;
+      walker.group.position.set(ax + (bx - ax) * t, gy, az + (bz - az) * t);
       if (bx !== ax || bz !== az) walker.group.rotation.y = Math.atan2(bx - ax, bz - az);
-      walker.group.position.y = Math.abs(Math.sin((time + walker.phase) * 7)) * 0.012;
+      walker.group.position.y = gy + Math.abs(Math.sin((time + walker.phase) * 7)) * 0.012;
 
       const stride = walking ? Math.sin((time + walker.phase) * 9) * 0.5 : 0;
       walker.legL.rotation.x = stride;
@@ -473,7 +487,8 @@ export class Life {
     for (const idler of this.idlers) {
       const sway = Math.sin((time + idler.phase) * 0.6);
       idler.group.rotation.y = idler.base + sway * 0.35;
-      idler.group.position.y = Math.abs(Math.sin((time + idler.phase) * 1.6)) * 0.006;
+      idler.group.position.y =
+        this.ground(idler.group.position.x, idler.group.position.z) + Math.abs(Math.sin((time + idler.phase) * 1.6)) * 0.006;
       idler.armL.rotation.x = -sway * 0.15;
       idler.armR.rotation.x = sway * 0.15;
     }
@@ -502,7 +517,7 @@ export class Life {
         if (cat.to.x !== cat.from.x || cat.to.z !== cat.from.z) {
           cat.group.rotation.y = Math.atan2(cat.to.x - cat.from.x, cat.to.z - cat.from.z);
         }
-        cat.group.position.y = Math.abs(Math.sin((time + cat.phase) * 6)) * 0.008;
+        cat.group.position.y = this.ground(x, z) + Math.abs(Math.sin((time + cat.phase) * 6)) * 0.008;
         cat.tail.rotation.z = Math.sin((time + cat.phase) * 3) * 0.45;
       }
     }
@@ -521,7 +536,7 @@ export class Life {
         }
         const x = dog.from.x + (dog.to.x - dog.from.x) * dog.t;
         const z = dog.from.z + (dog.to.z - dog.from.z) * dog.t;
-        dog.group.position.set(x, Math.abs(Math.sin((time + dog.phase) * 8)) * 0.012, z);
+        dog.group.position.set(x, this.ground(x, z) + Math.abs(Math.sin((time + dog.phase) * 8)) * 0.012, z);
         if (dog.to.x !== dog.from.x || dog.to.z !== dog.from.z) {
           dog.group.rotation.y = Math.atan2(dog.to.x - dog.from.x, dog.to.z - dog.from.z);
         }

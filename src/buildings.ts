@@ -228,20 +228,76 @@ function tree(gb: GeoBuilder, x: number, z: number, s: number, rnd: () => number
 }
 
 /**
+ * A wood is not made of one tree: a cell draws its own species, so a grove of
+ * oaks can hold a poplar and a pine or two.
+ */
+type TreeSpecies = 'oak' | 'poplar' | 'pine' | 'cypress';
+
+function speciesOf(roll: number): TreeSpecies {
+  return roll < 0.38 ? 'oak' : roll < 0.6 ? 'poplar' : roll < 0.87 ? 'pine' : 'cypress';
+}
+
+/**
  * A tree that really grows with its level: trunk, limbs, roots and crown all
  * scale up, so the fifth click is a tree three times as tall as the first.
  */
 function grownTree(gb: GeoBuilder, x: number, z: number, level: number, rnd: () => number) {
   const lv = Math.min(Math.max(level, 1), 5);
-  const H = 0.4 + (lv - 1) * 0.17;
-  const foot = 0.038 + (lv - 1) * 0.008;
-  const trunkTop = H * 0.52;
-  const crown = 0.14 + (lv - 1) * 0.05;
-  const centre = H * 0.78;
+  const kind = speciesOf(rnd());
+  // A poplar is a spire and a cypress a candle: the same click reads as another
+  // tree, which is what makes a wood look planted and not stamped.
+  const tall = kind === 'poplar' ? 1.26 : kind === 'cypress' ? 1.3 : kind === 'pine' ? 1.14 : 1;
+  const slim = kind === 'poplar' ? 0.6 : kind === 'cypress' ? 0.46 : kind === 'pine' ? 0.8 : 1;
+  const H = (0.4 + (lv - 1) * 0.17) * tall;
+  const foot = (0.038 + (lv - 1) * 0.008) * (kind === 'cypress' ? 0.8 : 1);
+  const trunkTop = H * (kind === 'pine' || kind === 'cypress' ? 0.34 : 0.52);
+  const crown = (0.14 + (lv - 1) * 0.05) * slim * (kind === 'pine' ? 1.08 : 1);
+  const centre = H * (kind === 'pine' || kind === 'cypress' ? 0.6 : 0.78);
   const bare = getSeason().bare;
   // Root flare and the trunk, in two tapered pieces so it thins as it rises.
   gb.add(cone(), C.trunk, [x, 0, z], [0, 0, 0], [foot * 1.7, foot * 1.1, foot * 1.7]);
   gb.add(taper(), C.trunk, [x, foot * 0.5, z], [0, 0, 0], [foot, trunkTop, foot]);
+  if (kind === 'pine' || kind === 'cypress') {
+    const needle = bare ? mixHex(C.leafDeep, C.snow, 0.45) : C.leafDeep;
+    if (kind === 'cypress') {
+      // A candle of needles: three cones, each one narrower and set higher, so
+      // the spires have the steps a real cypress shows from a distance.
+      const stacks = bare ? 3 : 4;
+      for (let i = 0; i < stacks; i++) {
+        const v = i / (stacks - 1);
+        const radius = crown * (1.05 - v * 0.62) * (0.9 + rnd() * 0.2);
+        gb.add(
+          cone(),
+          i % 2 === 1 ? mixHex(needle, 0x35543c, 0.4) : mixHex(needle, C.leaf, 0.25),
+          [x, H * (0.1 + v * 0.5), z],
+          [0, rnd() * 3, 0],
+          [radius * 2, H * (0.46 - v * 0.16), radius * 2],
+        );
+      }
+      if (bare) {
+        gb.add(cone(), mixHex(C.snow, needle, 0.25), [x, H * 0.72, z], [0, 0, 0], [crown * 0.6, H * 0.26, crown * 0.6]);
+      }
+      return;
+    }
+    // A pine: tiers of needles, the top one lit, the skirt dropping over the foot.
+    const tiers = 3 + (lv >= 3 ? 1 : 0) + (lv >= 5 ? 1 : 0);
+    const skirt = H * 0.2;
+    const span = H - skirt;
+    for (let i = 0; i < tiers; i++) {
+      const v = i / (tiers - 1);
+      const radius = crown * (1.5 - v * 1.15);
+      const tier = span / tiers;
+      gb.add(
+        cone(),
+        i === tiers - 1 && !bare ? C.leafLight : i % 2 === 1 ? C.leaf : needle,
+        [x, skirt + span * v * 0.94, z],
+        [0, rnd() * 3, 0],
+        [radius * 2, tier * 1.9, radius * 2],
+      );
+      if (bare) gb.add(cone(), C.snow, [x, skirt + span * v * 0.94 + tier * 0.9, z], [0, 0, 0], [radius * 1.5, tier * 0.8, radius * 1.5]);
+    }
+    return;
+  }
   // The upper trunk ends inside the crown, never above it.
   const upper = Math.max(0.06, centre + crown * 0.22 - (foot * 0.5 + trunkTop));
   gb.add(taper(), C.trunk, [x, foot * 0.5 + trunkTop, z], [0, 0, 0], [foot * 0.72, upper, foot * 0.72]);
@@ -270,6 +326,18 @@ function grownTree(gb: GeoBuilder, x: number, z: number, level: number, rnd: () 
       const y = centre + crown * (v * 0.95 - 0.45);
       const tone = i % 4 === 2 ? mixHex(C.leafDeep, C.snow, 0.5) : v > 0.55 ? C.snow : mixHex(C.snow, C.leaf, 0.18);
       gb.add(puff(), tone, [x + Math.cos(angle) * ring, y, z + Math.sin(angle) * ring], [0, rnd() * 3, 0], [r * 2, r * 1.8, r * 2]);
+    }
+    return;
+  }
+  if (kind === 'poplar') {
+    // Slender and upright: a column of clumps, the top one lit.
+    const clumps = 4 + Math.floor(lv / 2);
+    for (let i = 0; i < clumps; i++) {
+      const v = i / (clumps - 1);
+      const r = crown * (0.9 - v * 0.35) * (0.85 + rnd() * 0.3);
+      const y = H * 0.32 + (H * 0.62) * v;
+      const tone = v > 0.8 ? C.leafLight : i % 3 === 2 ? C.leafDeep : C.leaf;
+      gb.add(puff(), tone, [x + (rnd() - 0.5) * crown * 0.4, y, z + (rnd() - 0.5) * crown * 0.4], [0, rnd() * 3, 0], [r * 2, r * 2.4, r * 2]);
     }
     return;
   }
@@ -967,9 +1035,9 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
     void rnd;
   },
 
-  street: (gb, rnd) => {
+  street: (gb, rnd, _level, links) => {
     // A lane of packed earth, worn in patches rather than ruled in a cross.
-    gb.add(quad(), C.path, [0, 0.012, 0], [0, 0, 0], [0.99, 1, 0.99]);
+    gb.add(quad(), C.path, [0, 0.012, 0], [0, 0, 0], [1, 1, 1]);
     const light = mixHex(C.path, 0xf3e7cd, 0.3);
     const dark = mixHex(C.path, C.soil, 0.22);
     for (let i = 0; i < 3; i++) {
@@ -977,6 +1045,44 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
       const pz = (rnd() - 0.5) * 0.6;
       const size = 0.42 + rnd() * 0.3;
       gb.add(patch(Math.floor(rnd() * 6)), rnd() < 0.6 ? light : dark, [px, 0.014, pz], [0, rnd() * 6.283, 0], [size, 1, size]);
+    }
+    // Two ruts down the middle of the way it runs: the town's carts go that way.
+    const rut = mixHex(C.path, C.soil, 0.4);
+    if (links & (LINK_N | LINK_S)) {
+      for (const sx of [-0.15, 0.15]) {
+        gb.add(cube(), rut, [sx, 0.016, 0], [0, 0, 0], [0.1, 0.006, 1]);
+      }
+    }
+    if (links & (LINK_E | LINK_W)) {
+      for (const sz of [-0.15, 0.15]) {
+        gb.add(cube(), rut, [0, 0.016, sz], [0, 0, 0], [1, 0.006, 0.1]);
+      }
+    }
+    // Kerbs only where the lane ends: a road that carries on has no step in it.
+    const kerb = mixHex(C.stone, C.stoneLight, 0.5);
+    const edge = mixHex(C.stoneDark, C.path, 0.35);
+    for (const [dx, dz, bit] of [
+      [0, -1, LINK_N],
+      [1, 0, LINK_E],
+      [0, 1, LINK_S],
+      [-1, 0, LINK_W],
+    ] as Array<[number, number, number]>) {
+      if (links & bit) continue;
+      const across = dx !== 0;
+      gb.add(
+        cube(),
+        edge,
+        [dx * 0.47, 0.014, dz * 0.47],
+        [0, 0, 0],
+        [across ? 0.06 : 0.99, 0.02, across ? 0.99 : 0.06],
+      );
+      gb.add(
+        cube(),
+        kerb,
+        [dx * 0.45, 0.03, dz * 0.45],
+        [0, 0, 0],
+        [across ? 0.08 : 0.97, 0.024, across ? 0.97 : 0.08],
+      );
     }
     for (let i = 0; i < 2; i++) {
       gb.add(blob(), mixHex(C.stone, C.path, 0.6), [(rnd() - 0.5) * 0.8, 0.02, (rnd() - 0.5) * 0.8], [0, rnd() * 3, 0], [0.07, 0.03, 0.07]);
