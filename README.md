@@ -236,6 +236,18 @@ en otoño. La primera visita entra en la estación del mes.
 - El empedrado de plazas y caminos son polígonos irregulares (`patch`, seis formas) sobre un lecho
   de argamasa oscura, con las juntas al azar: una losa nunca es un cuadrado. La calle es tierra
   apisonada con manchas de desgaste, no una cruz de losas claras.
+- Los **molinos** eran tres tambores colocados a alturas fijas: con dos o tres pisos quedaban huecos
+  entre ellos y las aspas salían flotando. Ahora son dos tambores troncocónicos que se solapan, con la
+  galería en la junta, el capó sobre el último y las aspas en un eje que sale del muro.
+- Las **iglesias** (una casa junto a una torre) escondían la torre detrás del tejado de la nave, así
+  que la aguja y la cruz parecían flotar sobre el tejado. Ahora la torre siempre pasa el caballete, la
+  aguja arranca dentro del fuste (sin cornisa que sobrevuele) y la cruz se apoya en el vértice.
+- Los **árboles** tenían un tronco casi tan ancho como alto: un tocón. Ahora el tronco es fino y
+  troncocónico, con tres ramas y una copa de bolas redondas —`puff`, la mitad de triángulos que una
+  esfera entera—; en invierno la copa es de nieve con trozos de rama asomando.
+- Fuera los **tablones sueltos**: la madera a la deriva de la orilla, los troncos caídos del bosque,
+  las raíces en cruz y el banco bajo el roble (que parecía un montón de tablas en mitad del prado).
+  El banco es ahora un banco con patas y respaldo, y solo aparece donde hay plaza o paseo.
 - Las ventanas llevan marco de piedra que sobresale del muro, cruceta y alféizar; las puertas, jambas,
   dintel, dos cuarteles y picaporte. Las casas eligen entre siete cales de muro y muchas llevan
   entramado de madera en las esquinas, para que una calle no parezca la misma casa repetida.

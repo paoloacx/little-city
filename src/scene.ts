@@ -353,9 +353,10 @@ export class World {
           }
           gb.add(cube(), 0xd98d6a, [x + 0.1, 0.02, z - 0.06], [0.3, 0, 0.2], [0.05, 0.018, 0.05]);
         } else if (b.props === 'forest') {
-          // Driftwood: a small trunk of pale wood.
-          gb.add(cube(), 0xb3a78e, [x, 0.035, z], [0, random() * 3, 0], [0.22, 0.05, 0.06]);
-          gb.add(blob(), 0x8a7a5f, [x + 0.1, 0.04, z], [0, 0, 0], [0.06, 0.05, 0.05]);
+          // A patch of sea grass where the sand meets the wood: no loose planks
+          // lying about, which read as litter rather than as a shore.
+          tuft(x, z, 1.1);
+          pebble(x + 0.12, z - 0.08, 1.1, mixHex(b.pebble, b.sand, 0.4));
         } else {
           pebble(x, z, 1 + random() * 0.5, b.rock);
           if (random() < 0.5) tuft(x + 0.1, z - 0.05, 0.8);
@@ -390,7 +391,17 @@ export class World {
               gb.add(cone(), 0xc4633f, [mx, 0.055, mz], [0, 0, 0], [0.07, 0.045, 0.07]);
             }
           } else if (kind < 0.6) {
-            gb.add(cube(), 0x8a6a4f, [x, 0.03, z], [0, random() * 3, 0], [0.2, 0.055, 0.07]);
+            // A clump of ferns: three low fronds, not a log on the ground.
+            for (let i = 0; i < 3; i++) {
+              const angle = (i * Math.PI * 2) / 3 + random();
+              gb.add(
+                blob(),
+                mixHex(0x6f9a52, 0x4d7040, random() * 0.6),
+                [x + Math.cos(angle) * 0.07, 0.05, z + Math.sin(angle) * 0.07],
+                [0, random() * 3, 0.2 * Math.cos(angle)],
+                [0.16, 0.05, 0.12],
+              );
+            }
           } else {
             tuft(x, z, 1.4);
           }

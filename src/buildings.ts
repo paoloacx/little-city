@@ -4,7 +4,7 @@
  * Levels add floors, and windows register lights for the evening.
  */
 
-import { GeoBuilder, blob, cone, cube, dome, mixHex, panel, patch, plate, post, pyramid, quad, ring } from './geo';
+import { GeoBuilder, blob, cone, cube, dome, mixHex, panel, patch, plate, post, puff, pyramid, quad, ring, taper } from './geo';
 import { LINK_E, LINK_N, LINK_S, LINK_W } from './grid';
 import { Role } from './rules';
 import { getSeason } from './season';
@@ -77,6 +77,20 @@ function roof(gb: GeoBuilder, halfW: number, halfD: number, h: number, color: nu
 }
 
 /**
+ * A spire, not a roof: the pyramid starts a little inside the shaft it sits on
+ * and its rim is no wider than the shaft, so no daylight shows through the join.
+ */
+function spire(gb: GeoBuilder, x: number, z: number, halfW: number, h: number, color: number, y: number) {
+  gb.add(plate(), C.stoneLight, [x, y - 0.012, z], [0, 0, 0], [halfW * 2.15, 0.022, halfW * 2.15]);
+  gb.add(pyramid(), color, [x, y - 0.06, z], [0, 0, 0], [halfW * PY, h, halfW * PY]);
+}
+
+/** Where a roof ends up: the y of its ridge, so crosses and vanes sit on it. */
+function roofTop(y: number, h: number): number {
+  return y + 0.016 + h;
+}
+
+/**
  * A window that reads as a window: stone surround proud of the wall, dark glass
  * behind it, muntins crossing the panes and a sill underneath.
  */
@@ -145,130 +159,140 @@ function lamp(gb: GeoBuilder, x: number, z: number) {
 }
 
 function bench(gb: GeoBuilder, x: number, z: number, rotY: number) {
-  gb.add(cube(), C.wood, [x, 0.11, z], [0, rotY, 0], [0.3, 0.03, 0.09]);
-  gb.add(cube(), C.woodDark, [x, 0.06, z], [0, rotY, 0], [0.26, 0.05, 0.05]);
+  // A bench with legs and a back: two loose slabs read as planks on the ground.
+  for (const side of [-1, 1]) {
+    gb.add(cube(), C.woodDark, [x + side * 0.1, 0.045, z], [0, rotY, 0], [0.025, 0.09, 0.07]);
+    gb.add(cube(), C.woodDark, [x + side * 0.1, 0.14, z - 0.035], [0, rotY, 0], [0.02, 0.13, 0.02]);
+  }
+  gb.add(cube(), C.wood, [x, 0.095, z], [0, rotY, 0], [0.3, 0.024, 0.075]);
+  gb.add(cube(), C.wood, [x, 0.155, z - 0.038], [0, rotY, 0], [0.3, 0.05, 0.018]);
 }
 
 function tree(gb: GeoBuilder, x: number, z: number, s: number, rnd: () => number) {
-  const h = 0.22 * s;
-  gb.add(post(), C.trunk, [x, h / 2, z], [0, 0, 0], [0.07 * s, h, 0.07 * s]);
+  // A tree of about knee height on the block scale: a tapered trunk, three limbs
+  // and a crown of clumps. The trunk is thin on purpose — a thick one reads as a
+  // stump, which is what these used to look like.
+  const H = 0.34 + s * 0.28;
+  const foot = 0.024 + s * 0.014;
+  const trunkTop = H * 0.58;
+  const crown = 0.11 + s * 0.07;
+  const centre = H * 0.76;
+  gb.add(cone(), C.trunk, [x, 0, z], [0, 0, 0], [foot * 1.7, foot * 1.2, foot * 1.7]);
+  gb.add(taper(), C.trunk, [x, foot, z], [0, 0, 0], [foot, trunkTop, foot]);
   if (getSeason().bare) {
-    // Winter: the branches show, and the snow that has settled on them is what
-    // the tree looks like from here — a pale crown over a brown trunk.
+    // Winter: the limbs are the tree, and the snow that sits on them is what the
+    // eye reads from this distance.
     for (let i = 0; i < 5; i++) {
       const angle = (i * Math.PI * 2) / 5 + rnd() * 0.6;
-      const len = (0.16 + rnd() * 0.1) * s;
+      const len = crown * (1.1 + rnd() * 0.5);
       gb.add(
         post(),
         C.woodDark,
-        [x + Math.cos(angle) * len * 0.35, h + len * 0.3, z + Math.sin(angle) * len * 0.35],
-        [0.8 * Math.cos(angle), 0, -0.8 * Math.sin(angle)],
-        [0.022 * s, len, 0.022 * s],
+        [x + Math.cos(angle) * len * 0.3, crown * 0.5 + trunkTop * 0.8, z + Math.sin(angle) * len * 0.3],
+        [0.85 * Math.cos(angle), 0, -0.85 * Math.sin(angle)],
+        [foot * 0.42, len, foot * 0.42],
       );
     }
-    const clumps = 3;
+    const clumps = 5;
     for (let i = 0; i < clumps; i++) {
-      const angle = (i * Math.PI * 2) / clumps + 0.5;
-      const r = (0.13 + rnd() * 0.05) * s;
-      gb.add(
-        blob(),
-        i === 0 ? C.snow : mixHex(C.snow, C.leaf, 0.22),
-        [x + Math.cos(angle) * 0.06 * s, h + r * (i === 0 ? 0.9 : 0.5), z + Math.sin(angle) * 0.06 * s],
-        [rnd() * 3, rnd() * 3, 0],
-        [r * 2.1, r * 1.7, r * 2.1],
-      );
+      const angle = (i * Math.PI * 2) / clumps + rnd() * 0.4;
+      const v = i / (clumps - 1);
+      const ring = crown * (1 - v * 0.55) * (0.45 + rnd() * 0.45);
+      const r = crown * (0.3 + rnd() * 0.14) * (1 - v * 0.2);
+      const tone = i % 4 === 2 ? mixHex(C.leafDeep, C.snow, 0.5) : v > 0.5 ? C.snow : mixHex(C.snow, C.leaf, 0.2);
+      gb.add(puff(), tone, [x + Math.cos(angle) * ring, trunkTop + crown * (0.1 + v * 0.5), z + Math.sin(angle) * ring], [0, rnd() * 3, 0], [r * 2, r * 1.8, r * 2]);
     }
     return;
   }
-  const blobs = 2 + Math.floor(rnd() * 2);
-  for (let i = 0; i < blobs; i++) {
-    const r = (0.19 + rnd() * 0.07) * s;
-    const ox = (rnd() - 0.5) * 0.12 * s;
-    const oz = (rnd() - 0.5) * 0.12 * s;
-    const oy = h + r * (0.75 + rnd() * 0.4);
-    const leaf = [C.leaf, C.leafDeep, C.leafLight][Math.floor(rnd() * 3)];
-    gb.add(blob(), leaf, [x + ox, oy, z + oz], [rnd() * 3, rnd() * 3, 0], [r * 2, r * 2.1, r * 2]);
+  // Three limbs, from inside the crown outwards, so no twig pokes out below it.
+  for (let i = 0; i < 3; i++) {
+    const angle = (i * Math.PI * 2) / 3 + rnd() * 0.5;
+    const len = crown * (0.55 + rnd() * 0.3);
+    gb.add(
+      taper(),
+      C.trunk,
+      [x + Math.cos(angle) * foot * 0.3, centre - crown * 0.32, z + Math.sin(angle) * foot * 0.3],
+      [0.5 * Math.cos(angle), 0, -0.5 * Math.sin(angle)],
+      [foot * 0.4, len, foot * 0.4],
+    );
+  }
+  const clumps = 6;
+  for (let i = 0; i < clumps; i++) {
+    const angle = (i / clumps) * Math.PI * 2 + rnd() * 0.6;
+    const ring = i === 0 ? 0 : crown * (0.45 + rnd() * 0.5);
+    const rise = i === 0 ? crown * 0.55 : crown * (-0.25 + rnd() * 1.1);
+    const r = crown * (i === 0 ? 0.66 : 0.36 + rnd() * 0.24);
+    const tone = i === 0 ? C.leafLight : i % 3 === 1 ? C.leafDeep : C.leaf;
+    gb.add(puff(), tone, [x + Math.cos(angle) * ring, centre + rise, z + Math.sin(angle) * ring], [rnd() * 3, rnd() * 3, 0], [r * 2, r * 1.85, r * 2]);
   }
 }
 
 /**
- * A tree that really grows with its level: trunk, roots, branches and crown all
- * scale up, so the fifth click is a tree twice as tall as the first.
+ * A tree that really grows with its level: trunk, limbs, roots and crown all
+ * scale up, so the fifth click is a tree three times as tall as the first.
  */
 function grownTree(gb: GeoBuilder, x: number, z: number, level: number, rnd: () => number) {
   const lv = Math.min(Math.max(level, 1), 5);
-  const trunkH = 0.24 + (lv - 1) * 0.13;
-  const trunkR = 0.05 + (lv - 1) * 0.016;
-  const crown = 0.13 + (lv - 1) * 0.062;
-  if (lv >= 3) {
-    gb.add(plate(), C.trunk, [x, 0.014, z], [0, 0, 0], [0.18 + crown, 0.028, 0.18 + crown]);
-    for (let i = 0; i < 4; i++) {
-      const angle = (i * Math.PI) / 2 + 0.35;
-      gb.add(
-        cube(),
-        C.trunk,
-        [x + Math.cos(angle) * (0.06 + crown * 0.16), 0.012, z + Math.sin(angle) * (0.06 + crown * 0.16)],
-        [0, -angle, 0],
-        [0.12 + crown * 0.4, 0.026, 0.045],
-      );
-    }
-  }
-  gb.add(post(), C.trunk, [x, trunkH / 2, z], [0, 0, 0], [trunkR * 2, trunkH, trunkR * 2]);
-  for (let i = 1; i < lv; i++) {
-    gb.add(post(), C.woodDark, [x, (trunkH * i) / lv, z], [0, 0, 0], [trunkR * 2.2, 0.012, trunkR * 2.2]);
-  }
-  const branches = lv - 1;
-  for (let i = 0; i < branches; i++) {
-    const angle = (i * Math.PI * 2) / Math.max(branches, 1) + 0.6;
-    const len = 0.1 + (lv - 1) * 0.04;
-    gb.add(
-      post(),
-      C.trunk,
-      [x + Math.cos(angle) * len * 0.42, trunkH * 0.84, z + Math.sin(angle) * len * 0.42],
-      [0.6 * Math.cos(angle), 0, -0.6 * Math.sin(angle)],
-      [0.03, len, 0.03],
-    );
-  }
+  const H = 0.4 + (lv - 1) * 0.17;
+  const foot = 0.038 + (lv - 1) * 0.008;
+  const trunkTop = H * 0.52;
+  const crown = 0.14 + (lv - 1) * 0.05;
+  const centre = H * 0.78;
   const bare = getSeason().bare;
-  const blobs = bare ? 0 : 2 + lv;
-  for (let i = 0; i < blobs; i++) {
-    const angle = (i * Math.PI * 2) / blobs + rnd() * 0.5;
-    const spread = crown * (i === 0 ? 0.12 : 0.6 + rnd() * 0.5);
-    const r = crown * (i === 0 ? 1.02 : 0.55 + rnd() * 0.35);
-    const y = trunkH + crown * (i === 0 ? 0.86 : 0.3 + rnd() * 0.9);
-    const leaf = [C.leaf, C.leafDeep, C.leafLight][Math.floor(rnd() * 3)];
-    gb.add(
-      blob(),
-      leaf,
-      [x + Math.cos(angle) * spread, y, z + Math.sin(angle) * spread],
-      [rnd() * 3, rnd() * 3, 0],
-      [r * 2, r * 2.05, r * 2],
-    );
-  }
+  // Root flare and the trunk, in two tapered pieces so it thins as it rises.
+  gb.add(cone(), C.trunk, [x, 0, z], [0, 0, 0], [foot * 1.7, foot * 1.1, foot * 1.7]);
+  gb.add(taper(), C.trunk, [x, foot * 0.5, z], [0, 0, 0], [foot, trunkTop, foot]);
+  // The upper trunk ends inside the crown, never above it.
+  const upper = Math.max(0.06, centre + crown * 0.22 - (foot * 0.5 + trunkTop));
+  gb.add(taper(), C.trunk, [x, foot * 0.5 + trunkTop, z], [0, 0, 0], [foot * 0.72, upper, foot * 0.72]);
   if (bare) {
-    // The same crown, but made of snow: the shape of the tree is still there.
-    for (let i = 0; i < 4; i++) {
-      const angle = (i * Math.PI * 2) / 4 + 0.6;
-      const spread = crown * (i === 0 ? 0.12 : 0.5 + rnd() * 0.4);
-      const r = crown * (i === 0 ? 0.92 : 0.5 + rnd() * 0.25);
-      const y = trunkH + crown * (i === 0 ? 0.82 : 0.3 + rnd() * 0.7);
+    // Winter is the only time the limbs are worth drawing: with leaves on, they
+    // only poke out under the crown as brown boards.
+    for (let i = 0; i < lv; i++) {
+      const angle = (i * Math.PI * 2) / lv + 0.6;
+      const len = crown * (0.5 + rnd() * 0.25);
       gb.add(
-        blob(),
-        i === 0 ? C.snow : mixHex(C.snow, C.leaf, 0.2),
-        [x + Math.cos(angle) * spread, y, z + Math.sin(angle) * spread],
-        [rnd() * 3, rnd() * 3, 0],
-        [r * 2, r * 1.7, r * 2],
+        taper(),
+        C.trunk,
+        [x + Math.cos(angle) * foot * 0.3, centre - crown * 0.42, z + Math.sin(angle) * foot * 0.3],
+        [0.5 * Math.cos(angle), 0, -0.5 * Math.sin(angle)],
+        [foot * 0.3, len, foot * 0.3],
       );
     }
+    // The same crown, made of snow and of the dark branches showing through it,
+    // so a winter tree has the texture of a tree and not the shape of a lollipop.
+    const clumps = 5 + lv;
+    for (let i = 0; i < clumps; i++) {
+      const angle = (i * Math.PI * 2) / clumps + rnd() * 0.5;
+      const v = i / (clumps - 1);
+      const ring = crown * (1 - v * 0.6) * (0.5 + rnd() * 0.5);
+      const r = crown * (0.26 + rnd() * 0.16) * (1 - v * 0.2);
+      const y = centre + crown * (v * 0.95 - 0.45);
+      const tone = i % 4 === 2 ? mixHex(C.leafDeep, C.snow, 0.5) : v > 0.55 ? C.snow : mixHex(C.snow, C.leaf, 0.18);
+      gb.add(puff(), tone, [x + Math.cos(angle) * ring, y, z + Math.sin(angle) * ring], [0, rnd() * 3, 0], [r * 2, r * 1.8, r * 2]);
+    }
+    return;
   }
-  if (lv >= 4 && !bare) {
+  // The crown: a dome of clumps, the top one lit.
+  const clumps = 6 + lv;
+  for (let i = 0; i < clumps; i++) {
+    const angle = (i * Math.PI * 2) / clumps + rnd() * 0.5;
+    const v = i / (clumps - 1); // 0 at the bottom of the crown, 1 at the top
+    const ring = crown * (1 - v * 0.62) * (0.5 + rnd() * 0.5);
+    const r = crown * (0.34 + rnd() * 0.2) * (1 - v * 0.25);
+    const y = centre + crown * (v * 1.05 - 0.5);
+    const tone = v > 0.75 ? C.leafLight : i % 4 === 2 ? C.leafDeep : C.leaf;
+    gb.add(puff(), tone, [x + Math.cos(angle) * ring, y, z + Math.sin(angle) * ring], [rnd() * 3, rnd() * 3, 0], [r * 2, r * 1.9, r * 2]);
+  }
+  gb.add(puff(), C.leafLight, [x, centre + crown * 0.62, z], [0, 0, 0], [crown * 0.8, crown * 0.66, crown * 0.8]);
+  if (lv >= 4) {
     for (let i = 0; i < lv; i++) {
       gb.add(
         cube(),
         C.thatchDeep,
-        [x + (rnd() - 0.5) * crown * 1.5, trunkH + crown * (0.5 + rnd() * 0.9), z + (rnd() - 0.5) * crown * 1.5],
+        [x + (rnd() - 0.5) * crown * 1.4, centre + crown * (0.2 + rnd() * 0.8), z + (rnd() - 0.5) * crown * 1.4],
         [0, 0, 0],
-        [0.022, 0.022, 0.022],
+        [0.02, 0.02, 0.02],
       );
     }
   }
@@ -510,45 +534,75 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
   },
 
   chapel: (gb) => {
-    gb.add(cube(), C.wall, [0.06, 0.2, 0], [0, 0, 0], [0.44, 0.4, 0.62]);
-    roof(gb, 0.3, 0.36, 0.24, C.slate, 0.4);
-    gb.add(cube(), C.wall, [-0.28, 0.42, 0], [0, 0, 0], [0.24, 0.84, 0.24]);
-    gb.add(cube(), C.stoneDark, [-0.28, 0.86, 0], [0, 0, 0], [0.27, 0.05, 0.27]);
-    roof(gb, 0.19, 0.19, 0.3, C.slateDeep, 0.9);
-    windowBox(gb, -0.28, 0.66, 0.13, 0.07, 0.13);
-    doorBox(gb, -0.28, 0.12, 0.13, 0.11, 0.22);
-    chapelCross(gb, -0.28, 1.22, 0);
-    gb.add(plate(), C.glass, [0.2, 0.42, 0.32], [1.57, 0, 0], [0.14, 0.03, 0.14]);
-    gb.light(0.2, 0.42, 0.34, 0.9);
+    // A nave with a bell gable over the door. It stands on its plinth and the
+    // gable grows out of the wall, so nothing can look as if it were hanging.
+    const base = 0.03;
+    const naveH = 0.34;
+    gb.add(cube(), C.stoneDark, [0.04, base / 2, 0], [0, 0, 0], [0.62, base, 0.74]);
+    gb.add(cube(), C.wall, [0.04, base + naveH / 2, 0], [0, 0, 0], [0.46, naveH, 0.58]);
+    const eave = base + naveH;
+    roof(gb, 0.29, 0.33, 0.2, C.slate, eave);
+    // The bell gable: a thin wall on the end, with its arch and a little bell.
+    const gableH = 0.24;
+    gb.add(cube(), C.wall, [-0.24, eave + gableH / 2 - 0.05, 0], [0, 0, 0], [0.08, gableH + 0.1, 0.26]);
+    gb.add(cube(), C.ink, [-0.24, eave + gableH * 0.5, 0], [0, 0, 0], [0.085, 0.1, 0.06]);
+    gb.add(blob(), C.stoneDark, [-0.24, eave + gableH * 0.48, 0], [0, 0, 0], [0.05, 0.06, 0.05]);
+    chapelCross(gb, -0.24, eave + gableH - 0.02, 0);
+    // A round window over the door and two lancets along the nave.
+    gb.add(plate(), C.glass, [0.1, eave - 0.1, 0.3], [1.57, 0, 0], [0.13, 0.03, 0.13]);
+    gb.light(0.1, eave - 0.1, 0.32, 0.8);
+    doorBox(gb, 0.04, base + 0.11, 0.3, 0.12, 0.22);
+    windowBox(gb, -0.1, base + naveH * 0.55, 0.3, 0.06, 0.11, false);
+    windowBox(gb, 0.2, base + naveH * 0.55, 0.3, 0.06, 0.11, false);
   },
 
   cathedral: (gb, rnd, level) => {
-    // A nave with buttresses, a rose window and a spire that keeps climbing.
-    const naveH = 0.5 + (level - 2) * 0.08;
-    gb.add(cube(), C.wall, [0.08, naveH / 2, 0], [0, 0, 0], [0.5, naveH, 0.66]);
-    roof(gb, 0.32, 0.4, 0.3, C.slate, naveH);
+    // A nave with a tower at one end, and the tower always well above the ridge:
+    // that is what used to go wrong, a spire whose shaft hid behind the roof.
+    const base = 0.04;
+    const naveH = 0.4 + (level - 2) * 0.06;
+    gb.add(cube(), C.stoneDark, [0.08, base / 2, 0], [0, 0, 0], [0.58, base, 0.76]);
+    gb.add(cube(), C.wall, [0.08, base + naveH / 2, 0], [0, 0, 0], [0.44, naveH, 0.64]);
+    const eave = base + naveH;
+    roof(gb, 0.27, 0.36, 0.2, C.slate, eave);
+    const ridge = roofTop(eave, 0.2);
+    // Buttresses down both flanks, from the plinth to the eave.
     for (const sx of [-1, 1]) {
-      for (const sz of [-1, 0, 1]) {
-        gb.add(cube(), C.stoneDark, [sx * 0.27, naveH * 0.45, sz * 0.2], [0, 0, 0], [0.05, naveH * 0.8, 0.08]);
+      for (const sz of [-0.19, 0.19]) {
+        gb.add(cube(), C.stoneDark, [0.08 + sx * 0.22, base + naveH * 0.45, sz], [0, 0, 0], [0.05, naveH * 0.86, 0.09]);
       }
     }
-    // Facade tower, and a second one when it reaches three floors.
-    const towerH = 0.95 + (level - 2) * 0.22;
-    gb.add(cube(), C.wall, [-0.3, towerH / 2, 0], [0, 0, 0], [0.26, towerH, 0.26]);
-    gb.add(cube(), C.stoneDark, [-0.3, towerH, 0], [0, 0, 0], [0.3, 0.05, 0.3]);
-    roof(gb, 0.2, 0.2, 0.4, C.slateDeep, towerH + 0.04);
-    gb.add(cube(), C.ink, [-0.3, towerH + 0.5, 0], [0, 0, 0], [0.02, 0.15, 0.02]);
-    gb.add(cube(), C.ink, [-0.3, towerH + 0.53, 0], [0, 0, 0], [0.12, 0.02, 0.02]);
-    if (level >= 3) {
-      gb.add(cube(), C.wall, [0.3, (towerH * 0.7) / 2, 0], [0, 0, 0], [0.2, towerH * 0.7, 0.2]);
-      roof(gb, 0.16, 0.16, 0.3, C.slateDeep, towerH * 0.7);
+    // The tower: plinth, shaft with two string courses, cornice, belfry, spire.
+    const towerH = 0.86 + (level - 2) * 0.16;
+    const tx = -0.28;
+    gb.add(cube(), C.stoneDark, [tx, base + 0.03, 0], [0, 0, 0], [0.36, base + 0.06, 0.36]);
+    gb.add(cube(), C.wall, [tx, base + 0.06 + towerH / 2, 0], [0, 0, 0], [0.3, towerH, 0.3]);
+    for (const k of [0.45, 0.78]) {
+      gb.add(cube(), C.stoneLight, [tx, base + 0.06 + towerH * k, 0], [0, 0, 0], [0.32, 0.022, 0.32]);
     }
-    windowBox(gb, -0.3, towerH * 0.72, 0.14, 0.07, 0.14);
-    windowBox(gb, 0.08, naveH * 0.7, 0.34, 0.1, 0.16);
-    gb.add(plate(), C.glass, [0.08, naveH * 0.55, 0.34], [1.57, 0, 0], [0.2, 0.03, 0.2]);
-    gb.light(0.08, naveH * 0.55, 0.36, 1.2);
-    gb.add(cube(), C.door, [-0.3, 0.14, 0.14], [0, 0, 0], [0.12, 0.26, 0.03]);
-    for (let i = 0; i < 3; i++) gb.add(cube(), C.stoneLight, [-0.4 + i * 0.06, 0.01, 0.3], [0, 0, 0], [0.06, 0.03, 0.06]);
+    const shaftTop = base + 0.06 + towerH;
+    gb.add(cube(), C.stoneLight, [tx, shaftTop + 0.012, 0], [0, 0, 0], [0.36, 0.024, 0.36]);
+    for (const [dx, dz, rot] of [[0, 1, 0], [0, -1, 0], [1, 0, 1.57], [-1, 0, 1.57]] as const) {
+      gb.add(cube(), C.ink, [tx + dx * 0.15, shaftTop - 0.13, dz * 0.15], [0, rot, 0], [0.11, 0.2, 0.022]);
+    }
+    const spireBase = shaftTop + 0.02;
+    spire(gb, tx, 0, 0.15, 0.34, C.slateDeep, spireBase);
+    chapelCross(gb, tx, spireBase - 0.06 + 0.34 - 0.02, 0);
+    // The apse only when the building is tall enough to carry it.
+    if (level >= 3) {
+      gb.add(plate(), C.wall, [0.32, base + naveH * 0.45, 0], [0, 0, 0], [0.3, naveH * 0.9, 0.5]);
+      gb.add(cone(), C.slate, [0.32, base + naveH * 0.9, 0], [0, 0, 0], [0.34, 0.16, 0.54]);
+    }
+    if (level >= 4) {
+      // A flèche on the ridge, so a big church still has a high point.
+      gb.add(plate(), C.slateDeep, [0.08, ridge - 0.02, 0], [0, 0, 0], [0.09, 0.16, 0.09]);
+    }
+    // Openings: the rose window and the door on the west front, lancets along.
+    gb.add(plate(), C.glass, [0.08, eave - 0.11, 0.33], [1.57, 0, 0], [0.17, 0.03, 0.17]);
+    gb.light(0.08, eave - 0.11, 0.35, 1.2);
+    doorBox(gb, 0.08, base + 0.14, 0.33, 0.14, 0.28);
+    for (const sz of [-0.2, 0.04, 0.26]) windowBox(gb, 0.3, base + naveH * 0.55, sz, 0.05, 0.14, false);
+    windowBox(gb, tx, base + 0.06 + towerH * 0.62, 0.16, 0.06, 0.12, false);
     void rnd;
   },
 
@@ -771,7 +825,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
     gb.add(blob(), C.ink, [0, h - 0.12, 0], [0, 0, 0], [0.14, 0.12, 0.14]);
     gb.add(cube(), C.ink, [0, h - 0.02, 0], [0, 0, 0], [0.03, 0.08, 0.03]);
     gb.add(cube(), C.stone, [0, h + 0.03, 0], [0, 0, 0], [0.42, 0.07, 0.42]);
-    roof(gb, 0.28, 0.28, 0.36, C.slate, h + 0.07);
+    spire(gb, 0, 0, 0.19, 0.34, C.slate, h + 0.07);
     finial(gb, 0, h + 0.39, 0, 0.12, C.cloth);
     gb.add(cube(), C.door, [0, 0.14, 0.18], [0, 0, 0], [0.11, 0.24, 0.03]);
     windowBox(gb, 0, h * 0.55, 0.18, 0.07, 0.12);
@@ -833,29 +887,37 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
   },
 
   windmill: (gb, rnd, level) => {
-    const bodyH = 0.6 + (level - 1) * 0.12;
-    const base = 0.06;
-    gb.add(plate(), C.stoneDark, [0, 0.03, 0], [0, 0, 0], [0.64, 0.06, 0.64]);
-    // The tower tapers: three drums, each a little narrower than the one below.
-    const drums: Array<[number, number, number]> = [
-      [base, 0.24, 0.46],
-      [base + bodyH * 0.36, 0.2, 0.39],
-      [base + bodyH * 0.7, 0.16, 0.32],
-    ];
-    for (const [y, h, w] of drums) gb.add(plate(), C.wallWarm, [0, y + h / 2, 0], [0, 0, 0], [w, h, w]);
-    // Wooden gallery: where the miller walks round to set the sails.
-    gb.add(plate(), C.wood, [0, base + bodyH * 0.36, 0], [0, 0, 0], [0.52, 0.03, 0.52]);
+    // A tapered tower of two overlapping drums, a gallery where the miller walks,
+    // a cap on the last drum and the sails on a shaft out of the wall. Every
+    // piece hangs off another, so no level leaves anything in the air.
+    const H = 0.62 + (level - 1) * 0.11;
+    const foot = 0.08;
+    gb.add(plate(), C.stoneDark, [0, foot / 2, 0], [0, 0, 0], [0.58, foot, 0.58]);
+    let radius = 0.25;
+    for (let i = 0; i < 2; i++) {
+      const y = foot + (H / 2) * i;
+      gb.add(taper(), C.wallWarm, [0, y, 0], [0, 0, 0], [radius * 2, H / 2 + 0.03, radius * 2]);
+      radius *= 0.68;
+    }
+    const top = foot + H;
+    const galleryY = foot + H / 2;
+    gb.add(plate(), C.wood, [0, galleryY, 0], [0, 0, 0], [0.46, 0.03, 0.46]);
     for (let i = 0; i < 8; i++) {
       const angle = (i * Math.PI) / 4;
-      gb.add(post(), C.woodDark, [Math.cos(angle) * 0.25, base + bodyH * 0.36 + 0.05, Math.sin(angle) * 0.25], [0, 0, 0], [0.016, 0.08, 0.016]);
+      gb.add(post(), C.woodDark, [Math.cos(angle) * 0.21, galleryY + 0.055, Math.sin(angle) * 0.21], [0, 0, 0], [0.013, 0.08, 0.013]);
     }
-    gb.add(plate(), C.stone, [0, base + bodyH, 0], [0, 0, 0], [0.3, 0.04, 0.3]);
-    gb.add(dome(), C.thatch, [0, base + bodyH + 0.02, 0], [0, 0, 0], [0.36, 0.28, 0.36]);
-    gb.add(cube(), C.door, [0, 0.1, 0.17], [0, 0, 0], [0.11, 0.2, 0.03]);
-    windowBox(gb, 0, base + bodyH * 0.6, 0.16, 0.07, 0.07);
-    // Four sails: a spar, two rails, cross slats and the cloth between them.
-    const hubY = base + bodyH * 0.82;
-    gb.add(plate(), C.woodDark, [0, hubY, 0.24], [1.57, 0, 0], [0.09, 0.12, 0.09]);
+    // The cap sits on the last drum, with its rim and its finial.
+    gb.add(plate(), C.stone, [0, top + 0.01, 0], [0, 0, 0], [0.27, 0.02, 0.27]);
+    gb.add(dome(), C.thatch, [0, top + 0.02, 0], [0, 0, 0], [0.31, 0.24, 0.31]);
+    finial(gb, 0, top + 0.23, 0, 0.08);
+    doorBox(gb, 0, foot + 0.13, 0.17, 0.1, 0.2);
+    windowBox(gb, 0, galleryY + 0.16, 0.13, 0.06, 0.07, false);
+    // The sails: a shaft out of the wall, a hub, and four frames around it.
+    const hubY = foot + H * 0.8;
+    const hubZ = 0.15;
+    const sz = hubZ + 0.015;
+    gb.add(post(), C.woodDark, [0, hubY, hubZ * 0.45], [1.57, 0, 0], [0.05, 0.22, 0.05]);
+    gb.add(plate(), C.woodDark, [0, hubY, hubZ], [1.57, 0, 0], [0.07, 0.055, 0.07]);
     const tilt = 0.42;
     for (let i = 0; i < 4; i++) {
       const angle = (i * Math.PI) / 2 + tilt;
@@ -864,21 +926,21 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
       const px = Math.cos(angle);
       const py = -Math.sin(angle);
       const at = (along: number, side: number): [number, number] => [dx * along + px * side, hubY + dy * along + py * side];
-      const [sx, sy] = at(0.34, 0);
-      gb.add(cube(), C.wood, [sx, sy, 0.25], [0, 0, -angle], [0.035, 0.68, 0.026]);
+      const [sx, sy] = at(0.25, 0);
+      gb.add(cube(), C.wood, [sx, sy, sz], [0, 0, -angle], [0.028, 0.5, 0.022]);
       for (const side of [-1, 1]) {
-        const [rx, ry] = at(0.42, side * 0.058);
-        gb.add(cube(), C.wood, [rx, ry, 0.252], [0, 0, -angle], [0.018, 0.5, 0.018]);
+        const [rx, ry] = at(0.31, side * 0.042);
+        gb.add(cube(), C.wood, [rx, ry, sz + 0.002], [0, 0, -angle], [0.014, 0.36, 0.014]);
       }
       for (let k = 0; k < 4; k++) {
-        const [cx, cy] = at(0.22 + k * 0.12, 0);
-        gb.add(cube(), C.woodDark, [cx, cy, 0.254], [0, 0, -angle], [0.104, 0.012, 0.014]);
+        const [cx, cy] = at(0.16 + k * 0.09, 0);
+        gb.add(cube(), C.woodDark, [cx, cy, sz + 0.004], [0, 0, -angle], [0.078, 0.01, 0.012]);
       }
-      const [cx, cy] = at(0.44, 0);
-      gb.add(cube(), 0xf3e7cd, [cx, cy, 0.236], [0, 0, -angle], [0.1, 0.5, 0.006]);
-      gb.add(cube(), 0xd9c8a8, [cx, cy, 0.253], [0, 0, -angle], [0.012, 0.5, 0.004]);
+      const [cx, cy] = at(0.32, 0);
+      gb.add(cube(), 0xf3e7cd, [cx, cy, sz - 0.013], [0, 0, -angle], [0.074, 0.36, 0.005]);
+      gb.add(cube(), 0xd9c8a8, [cx, cy, sz + 0.003], [0, 0, -angle], [0.01, 0.36, 0.004]);
     }
-    gb.light(0, base + bodyH * 0.6, 0.18, 0.6);
+    gb.light(0, foot + 0.2, 0.2, 0.6);
     void rnd;
   },
 
@@ -1068,13 +1130,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
       gb.add(blob(), C.leafLight, [Math.cos(angle) * 0.32, 0.03, Math.sin(angle) * 0.32], [0, rnd() * 3, 0], [0.14, 0.06, 0.12]);
       gb.add(cube(), C.clothWarm, [Math.cos(angle + 0.5) * 0.34, 0.03, Math.sin(angle + 0.5) * 0.34], [0, 0, 0], [0.02, 0.02, 0.02]);
     }
-    bench(gb, 0.34, 0.3, -0.5);
-    if (lv >= 5) {
-      // A swing under the oldest oak in town.
-      gb.add(cube(), C.ink, [0.18, 0.5, 0.16], [0, 0, 0.35], [0.016, 0.3, 0.016]);
-      gb.add(cube(), C.ink, [-0.16, 0.5, 0.16], [0, 0, -0.35], [0.016, 0.3, 0.016]);
-      gb.add(cube(), C.wood, [0.01, 0.36, 0.16], [0, 0, 0], [0.3, 0.03, 0.1]);
-    }
+
   },
 
   orchard: (gb, rnd) => {

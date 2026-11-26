@@ -131,6 +131,24 @@ export const post = (): THREE.CylinderGeometry => POST;
 const BLOB = new THREE.IcosahedronGeometry(0.5, 0);
 export const blob = (): THREE.IcosahedronGeometry => BLOB;
 
+/**
+ * A tapered drum: wide at the foot, narrow at the top, like a mill tower or a
+ * trunk. Its base sits at y = 0 after scaling, so segments stack without gaps.
+ */
+const TAPER = (() => {
+  const geometry = new THREE.CylinderGeometry(0.34, 0.5, 1, 10);
+  geometry.translate(0, 0.5, 0);
+  return geometry;
+})();
+export const taper = (): THREE.CylinderGeometry => TAPER;
+
+/**
+ * A cheap round ball for foliage: half the triangles of `ball`, and at crown
+ * size the facets are hidden by the ink and by the clumps on top of each other.
+ */
+const PUFF = new THREE.SphereGeometry(0.5, 8, 5);
+export const puff = (): THREE.SphereGeometry => PUFF;
+
 /** A rounder ball, for heads and hats that should not look faceted. */
 const BALL = new THREE.SphereGeometry(0.5, 12, 8);
 export const ball = (): THREE.SphereGeometry => BALL;
