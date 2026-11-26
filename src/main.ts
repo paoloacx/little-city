@@ -6,12 +6,14 @@ import { growTown } from './grow';
 import { World } from './scene';
 import { encodeTown, shareUrl, townFromHash } from './share';
 import { openGuide } from './guide';
+import { Season, getSeason, nextSeason, seasonById, seasonForMonth, setSeason } from './season';
 import { introSeen, openIntro } from './intro';
 import { loadSlots, openSaves, persistSlots, type SlotData } from './saves';
 import { Ambience } from './audio';
 
 const SOUND_KEY = 'ciudad-pequena.sound';
 const CYCLE_KEY = 'ciudad-pequena.cycle';
+const SEASON_KEY = 'ciudad-pequena.season';
 
 const canvas = document.getElementById('town') as HTMLCanvasElement;
 const paletteEl = document.getElementById('palette') as HTMLDivElement;
@@ -26,6 +28,7 @@ const postcardEl = document.getElementById('postcard') as HTMLButtonElement;
 const guideEl = document.getElementById('guide') as HTMLButtonElement;
 const soundEl = document.getElementById('sound') as HTMLButtonElement;
 const cycleEl = document.getElementById('cycle') as HTMLButtonElement;
+const seasonEl = document.getElementById('season') as HTMLButtonElement;
 const undoEl = document.getElementById('undo') as HTMLButtonElement;
 const rotateEl = document.getElementById('rotate') as HTMLButtonElement;
 const brushEl = document.getElementById('brush') as HTMLButtonElement;
@@ -73,9 +76,24 @@ if (shared) {
   town = growTown((Math.random() * 1e9) | 0);
 }
 
+/** The season for this visit: a link, the last one used, or the month. */
+function loadSeason(): Season {
+  const fromLink = seasonById(new URLSearchParams(location.search).get('estacion'));
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(SEASON_KEY);
+  } catch {
+    stored = null;
+  }
+  return fromLink ?? seasonById(stored) ?? seasonForMonth(new Date().getMonth());
+}
+
+setSeason(loadSeason());
 world.setSeed(town.seed);
 totalEl.textContent = String(SPECIAL_COUNT);
 boot();
+paintSeason();
+world.setWeather(getSeason().weather);
 
 function boot(): void {
   resolve(false);
@@ -654,6 +672,32 @@ function setCycle(on: boolean): void {
 }
 
 cycleEl.addEventListener('click', () => setCycle(cycleEl.getAttribute('aria-pressed') !== 'true'));
+
+function paintSeason(): void {
+  seasonEl.textContent = `Estación: ${getSeason().label.toLowerCase()}`;
+  seasonEl.title = getSeason().note;
+  document.body.dataset.season = getSeason().id;
+}
+
+/**
+ * Turns the year: the island and every cell are rebuilt in the new palette and
+ * the weather follows. Costly only for the click that asks for it.
+ */
+function applySeason(season: Season, announce = false): void {
+  setSeason(season);
+  paintSeason();
+  world.setSeed(town.seed);
+  resolve(false);
+  world.setWeather(season.weather);
+  try {
+    localStorage.setItem(SEASON_KEY, season.id);
+  } catch {
+    /* Ignored: the season still holds for this visit. */
+  }
+  if (announce) toast(season.note);
+}
+
+seasonEl.addEventListener('click', () => applySeason(nextSeason(), true));
 
 renderPalette();
 

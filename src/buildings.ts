@@ -7,6 +7,7 @@
 import { GeoBuilder, blob, cone, cube, dome, mixHex, panel, patch, plate, post, pyramid, quad, ring } from './geo';
 import { LINK_E, LINK_N, LINK_S, LINK_W } from './grid';
 import { Role } from './rules';
+import { getSeason } from './season';
 
 const C = {
   ink: 0x3a2f2a,
@@ -28,9 +29,26 @@ const C = {
   iron: 0x6b6560,
   door: 0x7d5a3c,
   glass: 0x6f8285,
-  leaf: 0x8db46a,
-  leafDeep: 0x6f9a52,
-  leafLight: 0xa8c47d,
+  // The three leaf tones and the lawn follow the season; everything that draws
+  // a crown, a hedge or a lawn reads them here, so a season is one table.
+  get leaf(): number {
+    return getSeason().leaf[0];
+  },
+  get leafDeep(): number {
+    return getSeason().leaf[1];
+  },
+  get leafLight(): number {
+    return getSeason().leaf[2];
+  },
+  get lawn(): number {
+    return getSeason().lawn[0];
+  },
+  get crop(): number {
+    return getSeason().crop[0];
+  },
+  get cropDeep(): number {
+    return getSeason().crop[1];
+  },
   trunk: 0x8a6a4f,
   path: 0xd9c8a8,
   soil: 0xb59068,
@@ -38,6 +56,7 @@ const C = {
   clothWarm: 0xd98d6a,
   lamp: 0xf6d98a,
   water: 0xbcd6d6,
+  snow: 0xf4f7f9,
 };
 
 const PY = 1.41421356; // half-side → pyramid scale
@@ -133,6 +152,34 @@ function bench(gb: GeoBuilder, x: number, z: number, rotY: number) {
 function tree(gb: GeoBuilder, x: number, z: number, s: number, rnd: () => number) {
   const h = 0.22 * s;
   gb.add(post(), C.trunk, [x, h / 2, z], [0, 0, 0], [0.07 * s, h, 0.07 * s]);
+  if (getSeason().bare) {
+    // Winter: the branches show, and the snow that has settled on them is what
+    // the tree looks like from here — a pale crown over a brown trunk.
+    for (let i = 0; i < 5; i++) {
+      const angle = (i * Math.PI * 2) / 5 + rnd() * 0.6;
+      const len = (0.16 + rnd() * 0.1) * s;
+      gb.add(
+        post(),
+        C.woodDark,
+        [x + Math.cos(angle) * len * 0.35, h + len * 0.3, z + Math.sin(angle) * len * 0.35],
+        [0.8 * Math.cos(angle), 0, -0.8 * Math.sin(angle)],
+        [0.022 * s, len, 0.022 * s],
+      );
+    }
+    const clumps = 3;
+    for (let i = 0; i < clumps; i++) {
+      const angle = (i * Math.PI * 2) / clumps + 0.5;
+      const r = (0.13 + rnd() * 0.05) * s;
+      gb.add(
+        blob(),
+        i === 0 ? C.snow : mixHex(C.snow, C.leaf, 0.22),
+        [x + Math.cos(angle) * 0.06 * s, h + r * (i === 0 ? 0.9 : 0.5), z + Math.sin(angle) * 0.06 * s],
+        [rnd() * 3, rnd() * 3, 0],
+        [r * 2.1, r * 1.7, r * 2.1],
+      );
+    }
+    return;
+  }
   const blobs = 2 + Math.floor(rnd() * 2);
   for (let i = 0; i < blobs; i++) {
     const r = (0.19 + rnd() * 0.07) * s;
@@ -182,7 +229,8 @@ function grownTree(gb: GeoBuilder, x: number, z: number, level: number, rnd: () 
       [0.03, len, 0.03],
     );
   }
-  const blobs = 2 + lv;
+  const bare = getSeason().bare;
+  const blobs = bare ? 0 : 2 + lv;
   for (let i = 0; i < blobs; i++) {
     const angle = (i * Math.PI * 2) / blobs + rnd() * 0.5;
     const spread = crown * (i === 0 ? 0.12 : 0.6 + rnd() * 0.5);
@@ -197,7 +245,23 @@ function grownTree(gb: GeoBuilder, x: number, z: number, level: number, rnd: () 
       [r * 2, r * 2.05, r * 2],
     );
   }
-  if (lv >= 4) {
+  if (bare) {
+    // The same crown, but made of snow: the shape of the tree is still there.
+    for (let i = 0; i < 4; i++) {
+      const angle = (i * Math.PI * 2) / 4 + 0.6;
+      const spread = crown * (i === 0 ? 0.12 : 0.5 + rnd() * 0.4);
+      const r = crown * (i === 0 ? 0.92 : 0.5 + rnd() * 0.25);
+      const y = trunkH + crown * (i === 0 ? 0.82 : 0.3 + rnd() * 0.7);
+      gb.add(
+        blob(),
+        i === 0 ? C.snow : mixHex(C.snow, C.leaf, 0.2),
+        [x + Math.cos(angle) * spread, y, z + Math.sin(angle) * spread],
+        [rnd() * 3, rnd() * 3, 0],
+        [r * 2, r * 1.7, r * 2],
+      );
+    }
+  }
+  if (lv >= 4 && !bare) {
     for (let i = 0; i < lv; i++) {
       gb.add(
         cube(),
@@ -1014,7 +1078,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
 
   orchard: (gb, rnd) => {
     for (const [x, z] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]] as const) tree(gb, x, z, 0.42, rnd);
-    gb.add(quad(), C.leafLight, [0, 0.005, 0], [0, 0, 0], [0.9, 1, 0.9]);
+    gb.add(quad(), C.lawn, [0, 0.005, 0], [0, 0, 0], [0.9, 1, 0.9]);
   },
 
   dock: (gb, rnd, level) => {
@@ -1100,7 +1164,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
     gb.add(cube(), C.soil, [0, 0.015, 0], [0, 0, 0], [0.9, 0.03, 0.9]);
     for (let i = 0; i < 4; i++) {
       const x = -0.3 + i * 0.2;
-      gb.add(cube(), rnd() < 0.5 ? C.leaf : C.leafLight, [x, 0.055, 0], [0, 0, 0], [0.09, 0.06, 0.78]);
+      gb.add(cube(), rnd() < 0.5 ? C.crop : C.cropDeep, [x, 0.055, 0], [0, 0, 0], [0.09, 0.06, 0.78]);
     }
     if (rnd() < 0.5) gb.add(blob(), C.thatch, [0.34, 0.07, 0.32], [0, rnd() * 3, 0], [0.14, 0.12, 0.14]);
   },
@@ -1439,7 +1503,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
 
   garden: (gb, rnd) => {
     // A small walled garden: hedges, flower beds, a bird bath and a bench.
-    gb.add(quad(), C.leafLight, [0, 0.004, 0], [0, 0, 0], [0.94, 1, 0.94]);
+    gb.add(quad(), C.lawn, [0, 0.004, 0], [0, 0, 0], [0.94, 1, 0.94]);
     for (const [x, z, w, d] of [[0, -0.41, 0.9, 0.08], [0, 0.41, 0.9, 0.08], [-0.41, 0, 0.08, 0.74], [0.41, 0, 0.08, 0.74]] as const) {
       gb.add(cube(), C.leafDeep, [x, 0.05, z], [0, 0, 0], [w, 0.1, d]);
       gb.add(cube(), C.leaf, [x, 0.105, z], [0, 0, 0], [w * 0.94, 0.02, d * 0.94]);
@@ -1465,7 +1529,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
 
   park: (gb, rnd) => {
     // Bigger garden: pond, walks, three trees and benches.
-    gb.add(quad(), C.leafLight, [0, 0.004, 0], [0, 0, 0], [0.96, 1, 0.96]);
+    gb.add(quad(), C.lawn, [0, 0.004, 0], [0, 0, 0], [0.96, 1, 0.96]);
     gb.add(quad(), C.path, [0, 0.008, 0.14], [0, 0, 0], [0.94, 1, 0.13]);
     gb.add(quad(), C.path, [0.14, 0.008, 0], [0, Math.PI / 2, 0], [0.11, 1, 0.92]);
     gb.add(plate(), C.stone, [-0.22, 0.02, -0.24], [0, 0, 0], [0.44, 0.04, 0.36]);
@@ -1513,7 +1577,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
 
   maze: (gb, rnd) => {
     // A hedge maze with a little pavilion in the middle.
-    gb.add(quad(), C.leafLight, [0, 0.004, 0], [0, 0, 0], [0.96, 1, 0.96]);
+    gb.add(quad(), C.lawn, [0, 0.004, 0], [0, 0, 0], [0.96, 1, 0.96]);
     const hedge = (x: number, z: number, w: number, d: number, h = 0.2) => {
       gb.add(cube(), C.leafDeep, [x, h / 2, z], [0, 0, 0], [w, h, d]);
       gb.add(cube(), C.leaf, [x, h + 0.01, z], [0, 0, 0], [w * 0.9, 0.02, d * 0.9]);
@@ -1546,7 +1610,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
 
   arboretum: (gb, rnd) => {
     // The great garden: specimen trees, a ring walk and an obelisk.
-    gb.add(quad(), C.leafLight, [0, 0.004, 0], [0, 0, 0], [0.98, 1, 0.98]);
+    gb.add(quad(), C.lawn, [0, 0.004, 0], [0, 0, 0], [0.98, 1, 0.98]);
     gb.add(quad(), C.path, [0, 0.008, 0], [0, 0, 0], [0.98, 1, 0.12]);
     gb.add(quad(), C.path, [0, 0.009, 0], [0, Math.PI / 2, 0], [0.98, 1, 0.12]);
     gb.add(plate(), C.path, [0, 0.01, 0], [0, 0, 0], [0.5, 0.02, 0.5]);
@@ -1760,7 +1824,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
 
   watergarden: (gb, rnd) => {
     // A garden on the shore: pond, lily pads, reeds and a little landing.
-    gb.add(quad(), C.leafLight, [0, 0.004, 0], [0, 0, 0], [0.94, 1, 0.94]);
+    gb.add(quad(), C.lawn, [0, 0.004, 0], [0, 0, 0], [0.94, 1, 0.94]);
     gb.add(plate(), C.stone, [0.02, 0.02, 0.02], [0, 0, 0], [0.62, 0.04, 0.58]);
     gb.add(quad(), C.water, [0.02, 0.045, 0.02], [0, 0, 0], [0.54, 1, 0.5]);
     for (let i = 0; i < 5; i++) {

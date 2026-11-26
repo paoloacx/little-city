@@ -5,11 +5,12 @@
  */
 
 import * as THREE from 'three';
-import { key, rng, worldX, worldZ } from './grid';
+import { HALF, key, rng, worldX, worldZ } from './grid';
 import { Light } from './geo';
 import { Resolved } from './rules';
 import { GeoBuilder, ball, blob, cone, cube, plate, post } from './geo';
-import { ringTexture, shadowMaterial, smokeMaterial } from './materials';
+import { ringTexture, shadowMaterial, smokeMaterial, weatherMaterial } from './materials';
+import { Weather } from './season';
 
 type Tile = { x: number; z: number };
 
@@ -139,6 +140,8 @@ export class Life {
   })();
   private glowPoints: THREE.Points | null = null;
   private smokePoints: THREE.Points | null = null;
+  private weatherPoints: THREE.Points | null = null;
+  private weatherLook: THREE.ShaderMaterial | null = null;
   private dusk = 0;
   private time = 0;
 
@@ -371,6 +374,49 @@ export class Life {
     this.buildGlow(lights);
   }
 
+  /**
+   * The season's weather: petals, leaves or snow, one cloud of points over the
+   * whole island. It costs a single draw call and is independent of the town.
+   */
+  setWeather(kind: Weather): void {
+    if (this.weatherPoints) {
+      this.group.remove(this.weatherPoints);
+      this.weatherPoints.geometry.dispose();
+      this.weatherPoints = null;
+    }
+    this.weatherLook?.dispose();
+    this.weatherLook = null;
+    if (kind === 'none') return;
+
+    const snow = kind === 'snow';
+    const material = weatherMaterial(snow ? 0xffffff : kind === 'petal' ? 0xf2bfcb : 0xc4863c, !snow, snow ? 0.12 : kind === 'petal' ? 0.14 : 0.2, snow ? 0.5 : 0.75);
+    material.uniforms.uTime.value = this.time;
+    this.weatherLook = material;
+
+    const count = window.innerWidth < 720 ? 130 : 300;
+    const random = rng(0x51ed270b);
+    const positions = new Float32Array(count * 3);
+    const phases = new Float32Array(count);
+    const seeds = new Float32Array(count);
+    const reach = HALF + 0.6;
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (random() * 2 - 1) * reach;
+      positions[i * 3 + 1] = 0;
+      positions[i * 3 + 2] = (random() * 2 - 1) * reach;
+      phases[i] = random();
+      seeds[i] = random();
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
+    geometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
+    geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1.4, 0), 12);
+    this.weatherPoints = new THREE.Points(geometry, material);
+    this.weatherPoints.frustumCulled = false;
+    this.weatherPoints.renderOrder = 4;
+    this.group.add(this.weatherPoints);
+  }
+
   setDusk(dusk: number): void {
     this.dusk = dusk;
     this.glow.uniforms.uDusk.value = dusk;
@@ -381,6 +427,7 @@ export class Life {
     this.time = time;
     this.smoke.uniforms.uTime.value = time;
     this.glow.uniforms.uTime.value = time;
+    if (this.weatherLook) this.weatherLook.uniforms.uTime.value = time;
 
     for (const walker of this.walkers) {
       if (walker.path.length < 2) continue;
@@ -1004,6 +1051,13 @@ export class Life {
 
   dispose(): void {
     this.clear();
+    if (this.weatherPoints) {
+      this.group.remove(this.weatherPoints);
+      this.weatherPoints.geometry.dispose();
+      this.weatherPoints = null;
+    }
+    this.weatherLook?.dispose();
+    this.weatherLook = null;
     this.smoke.dispose();
     this.rings.dispose();
     this.figureShadowGeometry.dispose();

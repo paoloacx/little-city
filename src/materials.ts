@@ -363,6 +363,70 @@ export function smokeMaterial() {
   });
 }
 
+/**
+ * Falling weather: petals, leaves or snow, one draw call. Each point falls from
+ * the top of the island to the ground, swinging as it goes, and wraps around;
+ * the shape is drawn in the fragment so there is no texture.
+ */
+export function weatherMaterial(colour: number, leaf: boolean, size: number, fall: number) {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    uniforms: {
+      uColour: { value: new THREE.Color(colour) },
+      uTime: { value: 0 },
+      uSize: { value: size },
+      uFall: { value: fall },
+      uHeight: { value: 2.6 },
+      uLeaf: { value: leaf ? 1 : 0 },
+    },
+    vertexShader: /* glsl */ `
+      attribute float aPhase;
+      attribute float aSeed;
+      uniform float uTime;
+      uniform float uSize;
+      uniform float uFall;
+      uniform float uHeight;
+      varying float vDepth;
+
+      void main() {
+        float speed = uFall * (0.65 + aSeed * 0.7);
+        float t = fract(aPhase + uTime * speed / uHeight);
+        vec3 pos = position;
+        pos.y = uHeight * (1.0 - t);
+        float swing = 0.22 + aSeed * 0.34;
+        pos.x += sin((uTime * 0.7 + aSeed * 6.283) + t * 3.0) * swing;
+        pos.z += cos((uTime * 0.55 + aSeed * 4.1) + t * 2.4) * swing * 0.8;
+        vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = uSize * (0.7 + aSeed * 0.7) * 700.0 / max(2.0, -mv.z);
+        vDepth = t;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      precision highp float;
+      uniform vec3 uColour;
+      uniform float uLeaf;
+      varying float vDepth;
+
+      void main() {
+        vec2 c = gl_PointCoord - 0.5;
+        float a;
+        if (uLeaf > 0.5) {
+          // A leaf: an ellipse leaning to one side, so it reads in the air.
+          c.x += c.y * 0.4;
+          a = smoothstep(0.5, 0.3, length(vec2(c.x * 2.4, c.y * 1.35)));
+        } else {
+          a = smoothstep(0.5, 0.18, length(c));
+        }
+        if (a < 0.06) discard;
+        // Fade out as it nears the ground, so nothing pops.
+        gl_FragColor = vec4(uColour, a * 0.92 * smoothstep(0.0, 0.12, vDepth));
+      }
+    `,
+  });
+}
+
 /** A soft ring, drawn once on a canvas: the wake a boat leaves. */
 export function ringTexture(): THREE.CanvasTexture {
   const size = 64;

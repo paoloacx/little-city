@@ -5,6 +5,7 @@ import { GRID, HALF, Town, isShore, landAt, makeIsland, rng, worldX, worldZ } fr
 import { GeoBuilder, Light, blob, cone, cube, mixHex, panel, patch, post, quad } from './geo';
 import { Resolved, resolveTown } from './rules';
 import { buildRole } from './buildings';
+import { Weather, getSeason } from './season';
 import { Life } from './life';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
@@ -251,6 +252,7 @@ export class World {
     const gb = new GeoBuilder();
     const random = rng(seed ^ 0x9e3779b9);
     const drift = driftField(seed ^ 0x2545f491, 4.5);
+    const season = getSeason();
     const tones = this.biome.grass;
     for (let z = 0; z < GRID; z++) {
       for (let x = 0; x < GRID; x++) {
@@ -261,7 +263,7 @@ export class World {
         // A tone taken from the drift, so a tile is never its own colour.
         const g = Math.min(drift(x, z) * tones.length, tones.length - 1.0001);
         const near = Math.floor(g);
-        const grass = mixHex(tones[near], tones[near + 1] ?? tones[near], g - near);
+        const grass = mixHex(mixHex(tones[near], tones[near + 1] ?? tones[near], g - near), season.grass[0], season.grass[1]);
         const top = shore ? this.biome.sand : grass;
         gb.add(quad(), top, [wx, 0, wz], [0, 0, 0], [TILE, 1, TILE]);
 
@@ -318,6 +320,7 @@ export class World {
    */
   private scatter(gb: GeoBuilder, wx: number, wz: number, shore: boolean, random: () => number): void {
     const b = this.biome;
+    const season = getSeason();
     const spot = (spread = 0.6): [number, number] => [
       wx + (random() - 0.5) * spread,
       wz + (random() - 0.5) * spread,
@@ -326,7 +329,7 @@ export class World {
     // would come out as a black stroke, and a pale cone reads as a stray mark.
     const tuft = (x: number, z: number, scale = 1): void => {
       const turn = random() * 3;
-      const tone = b.name === 'bosque' ? 0x5f7f4a : 0x6f9a52;
+      const tone = season.bare ? mixHex(0x6f9a52, 0xe8ecef, 0.6) : b.name === 'bosque' ? 0x5f7f4a : 0x6f9a52;
       gb.add(blob(), tone, [x, 0.045 * scale, z], [0, turn, 0.2], [0.17 * scale, 0.1 * scale, 0.17 * scale]);
       gb.add(blob(), tone, [x + 0.06 * scale, 0.035 * scale, z - 0.05 * scale], [0, turn + 1, -0.2], [0.11 * scale, 0.08 * scale, 0.11 * scale]);
     };
@@ -361,7 +364,7 @@ export class World {
 
     switch (b.props) {
       case 'flowers':
-        if (random() < 0.3) {
+        if (random() < (season.bare ? 0.06 : 0.3)) {
           const [x, z] = spot();
           if (random() < 0.45) {
             for (let i = 0; i < 3; i++) flower(x + (random() - 0.5) * 0.16, z + (random() - 0.5) * 0.16);
@@ -454,9 +457,10 @@ export class World {
               : 0
             : (cell.rot * Math.PI) / 2 + jitter;
       const baseY = onWater && cell.role === 'dock' ? WATER_Y : 0;
+      const season = getSeason();
       const wx = worldX(cell.x) * TILE;
       const wz = worldZ(cell.z) * TILE;
-      const sig = `${cell.role}|${cell.storeys}|${cell.links}|${cell.rot}|${align.toFixed(4)}|${baseY}|${onWater}`;
+      const sig = `${cell.role}|${cell.storeys}|${cell.links}|${cell.rot}|${align.toFixed(4)}|${baseY}|${onWater}|${season.id}`;
 
       let cached = this.cellCache.get(key);
       if (cached && cached.sig !== sig) {
@@ -585,6 +589,11 @@ export class World {
     this.ghostPad.position.set(wx, 0.02, wz);
     (this.ghostMat.uniforms.uInk.value as THREE.Color).copy(kind === 'erase' ? this.eraseInk : this.ghostInk);
     this.ghostMat.uniforms.uAlpha.value = kind === 'erase' ? 0.32 : 0.22;
+  }
+
+  /** The weather of the season, over the whole island. */
+  setWeather(kind: Weather): void {
+    this.life.setWeather(kind);
   }
 
   /** Turns a pointer position into a tile, or null when it misses the island. */
