@@ -1,7 +1,26 @@
 /** The grid, the island and the saved town. */
 
-export const GRID = 15;
-export const HALF = (GRID - 1) / 2;
+/** The board the town is drawn on. It grows: see `EXPANSIONS`. */
+export let GRID = 15;
+export let HALF = (GRID - 1) / 2;
+/** The board every town starts on. */
+export const BASE_GRID = 15;
+
+/**
+ * The two ways of buying more land: the board gains a ring of cells on each
+ * side. The finds are high on purpose — the small town has to be well built
+ * before it can spill out of its own shore.
+ */
+export const EXPANSIONS: ReadonlyArray<{ size: number; finds: number }> = [
+  { size: 17, finds: 40 },
+  { size: 19, finds: 50 },
+];
+
+/** Resizes the board. Cells keep their index, so the caller shifts the town. */
+export function setGridSize(size: number): void {
+  GRID = size;
+  HALF = (size - 1) / 2;
+}
 export const MAX_LEVEL = 5;
 
 export type BlockKind =
@@ -81,6 +100,8 @@ export const MAX_GROUND = 3;
 
 export interface SavedTown {
   seed: number;
+  /** How big the board was: a town that grew past its shore needs its ring. */
+  size?: number;
   blocks: [number, number, BlockKind, number, number?][];
   ground?: [number, number, number][];
   found: string[];
@@ -101,15 +122,16 @@ export function rng(seed: number): () => number {
 }
 
 /** A blobby island: a superellipse whose outline wobbles with the seed. */
-export function makeIsland(seed: number): boolean[][] {
+export function makeIsland(seed: number, size = GRID): boolean[][] {
   const random = rng(seed);
+  const half = (size - 1) / 2;
   const phases = [0, 1, 2, 3].map(() => random() * Math.PI * 2);
   const mask: boolean[][] = [];
-  for (let z = 0; z < GRID; z++) {
+  for (let z = 0; z < size; z++) {
     const row: boolean[] = [];
-    for (let x = 0; x < GRID; x++) {
-      const dx = (x - HALF) / HALF;
-      const dz = (z - HALF) / HALF;
+    for (let x = 0; x < size; x++) {
+      const dx = (x - half) / half;
+      const dz = (z - half) / half;
       const angle = Math.atan2(dz, dx);
       let radius = 0.84 + 0.08 * Math.sin(angle * 3 + phases[0]);
       radius += 0.05 * Math.sin(angle * 5 + phases[1]);
@@ -118,7 +140,7 @@ export function makeIsland(seed: number): boolean[][] {
     }
     mask.push(row);
   }
-  return carveWater(mask, seed);
+  return carveWater(mask, seed, size);
 }
 
 /**
@@ -138,16 +160,16 @@ export function isChannel(mask: boolean[][], x: number, z: number): boolean {
  * the sea and ends in a tarn, sometimes only the tarn, sometimes nothing. If the
  * water takes too much land the plain island stays, so a town always fits.
  */
-function carveWater(mask: boolean[][], seed: number): boolean[][] {
+function carveWater(mask: boolean[][], seed: number, size: number): boolean[][] {
   const random = rng((seed ^ 0x2f7d92a3) >>> 0);
   const out = mask.map((row) => [...row]);
   const sea = mask.map((row) => row.map((land) => !land));
   const cut: boolean[][] = out.map((row) => row.map(() => false));
-  const dry = (x: number, z: number): boolean => x >= 0 && z >= 0 && x < GRID && z < GRID && out[z][x];
+  const dry = (x: number, z: number): boolean => x >= 0 && z >= 0 && x < size && z < size && out[z][x];
   const landCount = (): number => out.reduce((n, row) => n + row.filter(Boolean).length, 0);
   const before = landCount();
   const dig = (x: number, z: number): void => {
-    if (x < 0 || z < 0 || x >= GRID || z >= GRID) return;
+    if (x < 0 || z < 0 || x >= size || z >= size) return;
     out[z][x] = false;
     cut[z][x] = true;
   };
@@ -156,9 +178,9 @@ function carveWater(mask: boolean[][], seed: number): boolean[][] {
     // A river: it comes in from the sea at one edge, wanders inland and ends in
     // a tarn. The island border is water already, so it starts at the shore.
     const edge = Math.floor(random() * 4);
-    const lane = Math.floor(random() * (GRID - 6)) + 3;
-    let x = edge === 0 ? lane : edge === 1 ? lane : edge === 2 ? 0 : GRID - 1;
-    let z = edge === 0 ? 0 : edge === 1 ? GRID - 1 : lane;
+    const lane = Math.floor(random() * (size - 6)) + 3;
+    let x = edge === 0 ? lane : edge === 1 ? lane : edge === 2 ? 0 : size - 1;
+    let z = edge === 0 ? 0 : edge === 1 ? size - 1 : lane;
     const dx = edge === 2 ? 1 : edge === 3 ? -1 : 0;
     const dz = edge === 0 ? 1 : edge === 1 ? -1 : 0;
     for (let guard = 0; guard < 6 && !dry(x, z); guard++) {
@@ -169,11 +191,11 @@ function carveWater(mask: boolean[][], seed: number): boolean[][] {
       // No shore on that line: fall through to a tarn instead.
     } else {
       // Cut through the beach, so the stream really opens into the sea.
-      for (let bx = x - dx, bz = z - dz; bx >= 0 && bz >= 0 && bx < GRID && bz < GRID && dry(bx, bz); bx -= dx, bz -= dz) dig(bx, bz);
+      for (let bx = x - dx, bz = z - dz; bx >= 0 && bz >= 0 && bx < size && bz < size && dry(bx, bz); bx -= dx, bz -= dz) dig(bx, bz);
       const length = 4 + Math.floor(random() * 4);
       // A cell the stream may still take: inland, and still land.
       const ahead = (cx: number, cz: number): boolean =>
-        cx >= 1 && cz >= 1 && cx <= GRID - 2 && cz <= GRID - 2 && dry(cx, cz);
+        cx >= 1 && cz >= 1 && cx <= size - 2 && cz <= size - 2 && dry(cx, cz);
       for (let step = 0; step < length; step++) {
         dig(x, z);
         // Wider at the mouth, so it reads as an estuary.
@@ -216,7 +238,7 @@ function carveWater(mask: boolean[][], seed: number): boolean[][] {
 
   // Never drown the town, and never cut a corner of land adrift: the grown town
   // would put lanes and people on an islet nobody can reach.
-  if (landCount() < Math.max(52, Math.round(before * 0.68)) || !whole(out)) return mask;
+  if (landCount() < Math.max(52, Math.round(before * 0.68)) || !whole(out, size)) return mask;
 
   // A cut cell that still touches the sea is the mouth: the water steps down
   // there, so it keeps the sea level and the scene draws the little fall.
@@ -229,7 +251,7 @@ function carveWater(mask: boolean[][], seed: number): boolean[][] {
         [x, z + 1],
         [x, z - 1],
       ]) {
-        if (nx < 0 || nz < 0 || nx >= GRID || nz >= GRID) continue;
+        if (nx < 0 || nz < 0 || nx >= size || nz >= size) continue;
         if (sea[nz][nx]) return false;
       }
       return true;
@@ -240,11 +262,11 @@ function carveWater(mask: boolean[][], seed: number): boolean[][] {
 }
 
 /** True when every land tile can be walked to from every other one. */
-function whole(mask: boolean[][]): boolean {
+function whole(mask: boolean[][], size = mask.length): boolean {
   let start: [number, number] | null = null;
   let land = 0;
-  for (let z = 0; z < GRID; z++) {
-    for (let x = 0; x < GRID; x++) {
+  for (let z = 0; z < size; z++) {
+    for (let x = 0; x < size; x++) {
       if (!mask[z][x]) continue;
       land++;
       start ??= [x, z];
@@ -264,7 +286,8 @@ function whole(mask: boolean[][]): boolean {
 }
 
 export function landAt(mask: boolean[][], x: number, z: number): boolean {
-  if (x < 0 || z < 0 || x >= GRID || z >= GRID) return false;
+  const size = mask.length;
+  if (x < 0 || z < 0 || x >= size || z >= size) return false;
   return mask[z][x];
 }
 
@@ -276,6 +299,27 @@ export function isShore(mask: boolean[][], x: number, z: number): boolean {
     !landAt(mask, x, z + 1) ||
     !landAt(mask, x, z - 1)
   );
+}
+
+/**
+ * The island a town of `size` should have: the ring is the natural shore of a
+ * bigger island, and the middle keeps the coast the town already knew. Both are
+ * read from the seed, so a saved town comes back to the same map.
+ */
+export function islandFor(seed: number, size: number): boolean[][] {
+  const out = makeIsland(seed, size);
+  if (size <= BASE_GRID) return out;
+  // The shore the town already had stays where it is; the rest of the middle
+  // follows the bigger island, so the new ring comes out as land to build on and
+  // the coast reads as the same coast, one step out.
+  const base = makeIsland(seed, BASE_GRID);
+  const step = (size - BASE_GRID) / 2;
+  for (let z = 0; z < BASE_GRID; z++) {
+    for (let x = 0; x < BASE_GRID; x++) {
+      if (base[z][x]) out[z + step][x + step] = true;
+    }
+  }
+  return out;
 }
 
 export function worldX(x: number): number {
@@ -290,8 +334,10 @@ export function loadSaved(): SavedTown | null {
   try {
     const raw = localStorage.getItem(TOWN_KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw) as { seed?: unknown; blocks?: unknown; ground?: unknown; found?: unknown; clicks?: unknown };
+    const data = JSON.parse(raw) as { seed?: unknown; size?: unknown; blocks?: unknown; ground?: unknown; found?: unknown; clicks?: unknown };
     if (!data || typeof data.seed !== 'number' || !Array.isArray(data.blocks)) return null;
+    // The board comes back at the size it was left at, before anything is read.
+    if (typeof data.size === 'number' && data.size >= BASE_GRID) setGridSize(data.size);
     const blocks: [number, number, BlockKind, number, number?][] = [];
     for (const entry of data.blocks as unknown[]) {
       if (!Array.isArray(entry) || entry.length < 3) continue;
@@ -315,6 +361,7 @@ export function loadSaved(): SavedTown | null {
     }
     return {
       seed: data.seed,
+      size: GRID,
       blocks,
       ground,
       found: Array.isArray(data.found) ? (data.found as unknown[]).filter((f): f is string => typeof f === 'string') : [],
@@ -328,6 +375,7 @@ export function loadSaved(): SavedTown | null {
 export function saveTown(town: Town, found: Set<string>, clicks = 0): void {
   const data: SavedTown = {
     seed: town.seed,
+    size: GRID,
     // The hills the player made are part of the town, or a saved link would come
     // back flat under the houses.
     ground: town.ground

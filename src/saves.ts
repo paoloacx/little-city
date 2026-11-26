@@ -4,6 +4,8 @@ import { BlockKind } from './grid';
 
 export interface SlotData {
   seed: number;
+  /** The board the town was drawn on: 15, 17 or 19 cells a side. */
+  size?: number;
   blocks: [number, number, BlockKind, number, number?][];
   /** The hills the player made, cell by cell. */
   ground?: [number, number, number][];
@@ -30,6 +32,7 @@ export function loadSlots(): Array<SlotData | null> {
         : [];
       return {
         seed: entry.seed,
+        size: typeof entry.size === 'number' ? entry.size : undefined,
         blocks: entry.blocks.filter((b) => Array.isArray(b) && b.length >= 4) as SlotData['blocks'],
         ground,
         found: Array.isArray(entry.found) ? entry.found.filter((f): f is string => typeof f === 'string') : [],

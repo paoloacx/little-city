@@ -246,6 +246,11 @@ export class World {
     return this.mask;
   }
 
+  /** Frames the board again: a town that bought more land has to fit in view. */
+  refit(): void {
+    this.resize();
+  }
+
   get duskValue(): number {
     return this.dusk;
   }
@@ -904,6 +909,13 @@ export class World {
       }
     };
 
+    // An iron eyelet on the wall, so the rope is tied to something: a plate and a
+    // pin at the height of the eaves, facing the street.
+    const eyelet = (wx: number, wy: number, wz: number, alongX: boolean): void => {
+      gb.add(cube(), 0x4a4038, [wx, wy, wz], [0, 0, 0], alongX ? [0.014, 0.05, 0.034] : [0.034, 0.05, 0.014]);
+      gb.add(cube(), 0x6a5a48, [wx + (alongX ? -0.012 : 0), wy, wz + (alongX ? 0 : -0.012)], [0, 0, 0], [0.018, 0.018, 0.018]);
+    };
+
     for (const cell of resolved.values()) {
       if (open.has(cell.role)) continue;
       for (const [dx, dz] of [
@@ -916,26 +928,52 @@ export class World {
         if (!open.has(between.role) || open.has(far.role)) continue;
         // A tree across the way has no wall to tie the rope to.
         if (far.block === 'tree') continue;
-        hang(
-          worldX(cell.x) + dx * 0.44,
-          wallTop(cell),
-          worldZ(cell.z) + dz * 0.44,
-          worldX(far.x) - dx * 0.44,
-          wallTop(far),
-          worldZ(far.z) - dz * 0.44,
-        );
+        const ax = worldX(cell.x) + dx * 0.39;
+        const az = worldZ(cell.z) + dz * 0.39;
+        const bx = worldX(far.x) - dx * 0.39;
+        const bz = worldZ(far.z) - dz * 0.39;
+        // Tied at the eaves of each house, and lifted by the terrace it stands on.
+        const ay = this.hillLevel(cell.x, cell.z) * HILL_STEP + wallTop(cell);
+        const by = this.hillLevel(far.x, far.z) * HILL_STEP + wallTop(far);
+        eyelet(ax, ay, az, dx !== 0);
+        eyelet(bx, by, bz, dx !== 0);
+        hang(ax, ay, az, bx, by, bz);
       }
     }
 
-    // The square gets its own criss-cross of paper, high enough to read from above.
+    // The square gets its own net of paper, and the ropes are held by masts
+    // planted on the kerb: a garland over a square has no wall to hang from.
+    const masts = new Map<string, number>();
+    /** Plants a mast on the paving and answers the height its rope ties at. */
+    const mast = (wx: number, wz: number, base: number): number => {
+      const id = `${wx.toFixed(2)},${wz.toFixed(2)}`;
+      const known = masts.get(id);
+      if (known !== undefined) return known;
+      const top = base + 0.72;
+      masts.set(id, top);
+      gb.add(cube(), 0x8a7150, [wx, base + 0.012, wz], [0, 0, 0], [0.09, 0.024, 0.09]);
+      gb.add(cube(), 0x9a7a55, [wx, base + (top - base) / 2 + 0.02, wz], [0, 0, 0], [0.03, top - base, 0.03]);
+      // A cross-bar and a ball on top: a mast, not a fence post.
+      gb.add(cube(), 0x9a7a55, [wx, top - 0.03, wz], [0, 0, 0], [0.075, 0.016, 0.016]);
+      gb.add(puff(), 0xc9a870, [wx, top + 0.03, wz], [0, 0, 0], [0.05, 0.045, 0.05]);
+      return top;
+    };
+
     for (const cell of resolved.values()) {
       if (!square.has(cell.role)) continue;
-      if ((cell.x + cell.z) % 2 !== 0) continue;
       const cx = worldX(cell.x);
       const cz = worldZ(cell.z);
-      const height = 0.82 + Math.min(cell.storeys, 3) * 0.06;
-      hang(cx - 0.46, height, cz, cx + 0.46, height, cz);
-      hang(cx, height, cz - 0.46, cx, height, cz + 0.46);
+      const base = this.hillLevel(cell.x, cell.z) * HILL_STEP;
+      // A checkerboard of spans, so the square is covered by a net and not by a
+      // single row of ropes.
+      const alongX = (cell.x + cell.z) % 2 === 0;
+      const ax = alongX ? cx - 0.46 : cx;
+      const az = alongX ? cz : cz - 0.46;
+      const bx = alongX ? cx + 0.46 : cx;
+      const bz = alongX ? cz : cz + 0.46;
+      const ay = mast(ax, az, base);
+      const by = mast(bx, bz, base);
+      hang(ax, ay, az, bx, by, bz);
     }
 
     const geometry = gb.build();
@@ -1010,7 +1048,8 @@ export class World {
   }
 
   zoomBy(delta: number): void {
-    this.cam.distance = THREE.MathUtils.clamp(this.cam.distance * (1 + delta * 0.0012), 12, 62);
+    const far = 62 * (GRID / 15);
+    this.cam.distance = THREE.MathUtils.clamp(this.cam.distance * (1 + delta * 0.0012), 12, far);
     this.applyCamera();
   }
 
@@ -1088,7 +1127,9 @@ export class World {
     const aspect = width / height;
     this.camera.aspect = aspect;
     // Portrait screens are narrow: pull back so the island still reads.
-    this.cam.distance = THREE.MathUtils.clamp(aspect < 0.9 ? 22 / Math.max(aspect, 0.42) : 22, 18, 52);
+    // A board that grew needs the camera to step back with it.
+    const fit = 22 * (GRID / 15);
+    this.cam.distance = THREE.MathUtils.clamp(aspect < 0.9 ? fit / Math.max(aspect, 0.42) : fit, 18, 78);
     this.camera.updateProjectionMatrix();
     this.applyCamera();
   }

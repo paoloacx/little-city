@@ -612,6 +612,14 @@ function wallAxis(links: number): 'x' | 'z' {
   return 'x';
 }
 
+/** A crate with its corner battens, for the docks and the market. */
+function crate(gb: GeoBuilder, x: number, y: number, z: number, s = 1, tone = 0xb59068) {
+  gb.add(cube(), tone, [x, y + 0.05 * s, z], [0, 0, 0], [0.1 * s, 0.1 * s, 0.1 * s]);
+  gb.add(cube(), C.woodDark, [x, y + 0.1 * s, z], [0, 0, 0], [0.104 * s, 0.01 * s, 0.104 * s]);
+  gb.add(cube(), C.woodDark, [x, y + 0.05 * s, z + 0.048 * s], [0, 0, 0], [0.016 * s, 0.1 * s, 0.008 * s]);
+  gb.add(cube(), C.woodDark, [x + 0.048 * s, y + 0.05 * s, z], [0, 0, 0], [0.008 * s, 0.1 * s, 0.016 * s]);
+}
+
 const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, links: number) => void> = {
   house: (gb, rnd, level) => {
     const floors = Math.min(level, 3);
@@ -2182,6 +2190,745 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
     gb.add(cube(), 0x6b5140, [-0.27, 0.34, 0.26], [0, 0, 0.3], [0.06, 0.1, 0.05]);
     gb.light(0.16, 0.37, 0.09, 0.8);
   },
+  /* ---------------------------------------------------------- small fittings */
+
+  bakery: (gb, rnd) => {
+    houseBlock(gb, 0.56, 0.52, 1, rnd, { roof: C.roofDeep, wall: C.wallWarm, chimney: false });
+    // The oven, proud of the flank: brick drum, dome and a funnel of its own.
+    gb.add(cube(), 0xb5714f, [0.29, 0.085, -0.06], [0, 0, 0], [0.26, 0.17, 0.26]);
+    gb.add(dome(), 0xc4855c, [0.29, 0.17, -0.06], [0, 0, 0], [0.3, 0.2, 0.3]);
+    gb.add(cube(), C.ink, [0.29, 0.08, 0.08], [0, 0, 0], [0.13, 0.12, 0.03]);
+    chimney(gb, 0.29, 0.28, -0.06);
+    // A board of loaves by the door, and the sign on its bracket.
+    gb.add(cube(), C.wood, [-0.2, 0.12, 0.3], [0, 0, 0], [0.24, 0.02, 0.1]);
+    for (let i = 0; i < 3; i++) gb.add(blob(), 0xe0b478, [-0.27 + i * 0.07, 0.145, 0.3], [0, i, 0], [0.07, 0.045, 0.05]);
+    gb.add(cube(), C.iron, [0.2, 0.34, 0.28], [0, 0, 0], [0.012, 0.012, 0.14]);
+    gb.add(cube(), 0xf0d8a8, [0.2, 0.27, 0.34], [0, 0, 0], [0.14, 0.1, 0.012]);
+    gb.light(-0.2, 0.18, 0.34, 0.7);
+  },
+
+  apothecary: (gb, rnd) => {
+    houseBlock(gb, 0.54, 0.52, 1, rnd, { timber: true, wall: 0xe7ece1 });
+    // The sign hangs from an iron arm, with a painted cross.
+    gb.add(cube(), C.iron, [0.19, 0.36, 0.26], [0, 0, 0], [0.012, 0.012, 0.16]);
+    gb.add(cube(), C.iron, [0.19, 0.31, 0.34], [0, 0, 0], [0.01, 0.09, 0.01]);
+    gb.add(cube(), 0xf0d8a8, [0.19, 0.25, 0.34], [0, 0, 0], [0.12, 0.1, 0.012]);
+    gb.add(cube(), 0x6f9d5c, [0.19, 0.25, 0.348], [0, 0, 0], [0.03, 0.06, 0.004]);
+    gb.add(cube(), 0x6f9d5c, [0.19, 0.25, 0.348], [0, 0, 0], [0.07, 0.02, 0.004]);
+    // Herbs in pots and a climbing vine up the corner.
+    for (let i = 0; i < 3; i++) {
+      gb.add(plate(), C.clothWarm, [-0.24 + i * 0.09, 0.05, 0.28], [0, 0, 0], [0.07, 0.1, 0.07]);
+      gb.add(puff(), i === 1 ? C.leafDeep : C.leaf, [-0.24 + i * 0.09, 0.12, 0.28], [0, rnd() * 3, 0], [0.09, 0.07, 0.09]);
+    }
+    for (let i = 0; i < 4; i++) gb.add(blob(), C.leafDeep, [-0.27, 0.16 + i * 0.08, 0.2], [0, i, 0], [0.07, 0.06, 0.06]);
+    gb.light(0.19, 0.25, 0.4, 0.6);
+  },
+
+  bathhouse: (gb, rnd) => {
+    houseBlock(gb, 0.6, 0.54, 2, rnd, { roof: C.slate, wall: C.wallCool, chimney: false });
+    // A dome over the steam room, with a lantern on top and the vapour rising.
+    gb.add(plate(), C.stoneLight, [0, 0.6 + 0.02, 0], [0, 0, 0], [0.34, 0.03, 0.34]);
+    gb.add(dome(), C.copper, [0, 0.62, 0], [0, 0, 0], [0.32, 0.26, 0.32]);
+    gb.add(plate(), C.stoneLight, [0, 0.86, 0], [0, 0, 0], [0.06, 0.05, 0.06]);
+    for (let i = 0; i < 3; i++) {
+      gb.add(puff(), 0xf4f7f9, [0.16 + (rnd() - 0.5) * 0.08, 0.86 + i * 0.06, 0.14], [0, rnd() * 3, 0], [0.1, 0.07, 0.1]);
+    }
+    // The pool: a stone basin at the front, with its steps.
+    gb.add(cube(), C.stoneDark, [0, 0.02, 0.32], [0, 0, 0], [0.5, 0.04, 0.22]);
+    gb.add(cube(), C.stoneLight, [0, 0.05, 0.32], [0, 0, 0], [0.46, 0.03, 0.18]);
+    gb.add(quad(), C.water, [0, 0.068, 0.32], [0, 0, 0], [0.4, 1, 0.13]);
+    windowBox(gb, 0, 0.44, 0.28, 0.1, 0.09);
+  },
+
+  pottery: (gb, rnd) => {
+    houseBlock(gb, 0.54, 0.5, 1, rnd, { roof: C.roof, wall: C.wallWarm, chimney: false });
+    // The kiln: a brick cone with its mouth and a thread of smoke.
+    gb.add(plate(), C.stoneDark, [0.28, 0.02, -0.1], [0, 0, 0], [0.3, 0.04, 0.3]);
+    gb.add(taper(), 0xb5714f, [0.28, 0.04, -0.1], [0, 0, 0], [0.26, 0.34, 0.26]);
+    gb.add(cube(), C.ink, [0.28, 0.11, 0.03], [0, 0, 0], [0.1, 0.13, 0.03]);
+    gb.add(plate(), C.iron, [0.28, 0.39, -0.1], [0, 0, 0], [0.1, 0.02, 0.1]);
+    for (let i = 0; i < 2; i++) gb.add(puff(), 0xe8e2d6, [0.28, 0.42 + i * 0.06, -0.1], [0, i, 0], [0.09, 0.07, 0.09]);
+    // Pots drying in the sun.
+    for (let i = 0; i < 4; i++) {
+      const px = -0.28 + (i % 2) * 0.11;
+      const pz = 0.22 + Math.floor(i / 2) * 0.1;
+      gb.add(plate(), i % 2 ? C.clothWarm : 0xc98a5c, [px, 0.05, pz], [0, 0, 0], [0.08, 0.1, 0.08]);
+    }
+    gb.light(0.28, 0.1, 0.06, 0.7);
+  },
+
+  weaver: (gb, rnd) => {
+    houseBlock(gb, 0.58, 0.54, 2, rnd, { timber: true, roof: C.roof });
+    // Cloth on the line: a frame and four dyed panels drying.
+    const tones = [0xd98d6a, 0xece4d3, 0x6f9d8c, 0xf0c05a];
+    for (const sx of [-1, 1]) gb.add(post(), C.woodDark, [sx * 0.34, 0.16, 0.3], [0, 0, 0], [0.022, 0.32, 0.022]);
+    gb.add(cube(), C.woodDark, [0, 0.32, 0.3], [0, 0, 0], [0.7, 0.014, 0.014]);
+    for (let i = 0; i < 4; i++) gb.add(cube(), tones[i], [-0.25 + i * 0.17, 0.25, 0.3], [0, 0, 0], [0.11, 0.13, 0.008]);
+    // A loom wheel by the door.
+    gb.add(ring(), C.wood, [0.3, 0.14, 0.18], [0.2, 0.5, 0], [0.22, 0.22, 0.22]);
+    gb.add(plate(), C.woodDark, [0.3, 0.14, 0.18], [1.57, 0, 0.2], [0.05, 0.03, 0.05]);
+  },
+
+  dairy: (gb, rnd) => {
+    houseBlock(gb, 0.54, 0.5, 1, rnd, { roof: C.roofDeep, wall: C.wallWarm });
+    // Churns on the step and a bench with the morning's cheese.
+    for (let i = 0; i < 3; i++) {
+      gb.add(taper(), 0xcfd4d8, [-0.28 + i * 0.1, 0.005, 0.3], [0, 0, 0], [0.07, 0.13, 0.07]);
+      gb.add(plate(), C.iron, [-0.28 + i * 0.1, 0.135, 0.3], [0, 0, 0], [0.05, 0.014, 0.05]);
+    }
+    gb.add(cube(), C.wood, [0.24, 0.12, 0.28], [0, 0, 0], [0.22, 0.02, 0.1]);
+    for (const sx of [-1, 1]) gb.add(post(), C.woodDark, [0.24 + sx * 0.09, 0.06, 0.28], [0, 0, 0], [0.02, 0.12, 0.02]);
+    gb.add(plate(), 0xf2e8c8, [0.2, 0.16, 0.28], [0, 0, 0], [0.11, 0.06, 0.11]);
+  },
+
+  bodega: (gb, rnd) => {
+    houseBlock(gb, 0.56, 0.52, 1, rnd, { roof: C.roofDeep, wall: C.wallWarm });
+    // Three casks under the porch, and the vine over the door.
+    for (const [x, z] of [[-0.28, 0.26], [-0.14, 0.34], [0.28, 0.26]] as const) {
+      gb.add(plate(), C.wood, [x, 0.09, z], [0, 0, 0], [0.13, 0.18, 0.13]);
+      for (const y of [0.04, 0.14]) gb.add(plate(), C.woodDark, [x, y, z], [0, 0, 0], [0.138, 0.014, 0.138]);
+    }
+    for (const sx of [-1, 1]) gb.add(post(), C.woodDark, [sx * 0.22, 0.3, 0.36], [0, 0, 0], [0.022, 0.6, 0.022]);
+    gb.add(cube(), C.woodDark, [0, 0.58, 0.36], [0, 0, 0], [0.5, 0.016, 0.016]);
+    for (let i = 0; i < 5; i++) gb.add(puff(), C.leaf, [-0.2 + i * 0.1, 0.6, 0.36], [0, i, 0], [0.13, 0.08, 0.13]);
+    gb.light(0, 0.54, 0.36, 0.6);
+  },
+
+  icehouse: (gb, rnd) => {
+    // A stone vault dug into the bank, turf on the roof and ice in the mouth.
+    gb.add(cube(), C.stoneDark, [0, 0.012, 0], [0, 0, 0], [0.66, 0.024, 0.6]);
+    gb.add(cube(), C.stone, [0, 0.11, 0], [0, 0, 0], [0.56, 0.2, 0.5]);
+    gb.add(blob(), C.leafDeep, [0, 0.22, 0], [0, rnd() * 3, 0], [0.68, 0.22, 0.6]);
+    gb.add(blob(), C.leaf, [0, 0.26, 0], [0, rnd() * 3, 0], [0.5, 0.16, 0.46]);
+    gb.add(cube(), C.ink, [0, 0.1, 0.26], [0, 0, 0], [0.2, 0.18, 0.02]);
+    gb.add(cube(), C.stoneLight, [0, 0.2, 0.26], [0, 0, 0], [0.26, 0.03, 0.05]);
+    for (let i = 0; i < 3; i++) gb.add(cube(), 0xe8f0f2, [-0.05 + i * 0.05, 0.04, 0.29], [0, 0, 0], [0.03, 0.06, 0.03]);
+    gb.light(0, 0.1, 0.3, 0.5);
+  },
+
+  lodge: (gb, rnd) => {
+    const top = houseBlock(gb, 0.56, 0.5, 1, rnd, { timber: true, roof: C.thatch, wall: 0xf1e6cf });
+    // A porch of two trunks, and the antlers over the door.
+    for (const sx of [-1, 1]) gb.add(post(), C.trunk, [sx * 0.28, 0.14, 0.32], [0, 0, 0], [0.04, 0.28, 0.04]);
+    gb.add(cube(), C.thatchDeep, [0, 0.28, 0.32], [0, 0, 0], [0.7, 0.05, 0.22]);
+    gb.add(cube(), C.wood, [0, 0.24, 0.26], [0, 0, 0], [0.34, 0.02, 0.16]);
+    gb.add(post(), C.cloth, [0, 0.3, 0.2], [0, 0, 0.5], [0.012, 0.1, 0.012]);
+    gb.add(post(), C.cloth, [0, 0.3, 0.2], [0, 0, -0.5], [0.012, 0.1, 0.012]);
+    for (const sx of [-1, 1]) gb.add(cone(), C.cloth, [sx * 0.05, 0.35, 0.2], [0, 0, sx * 0.6], [0.03, 0.09, 0.03]);
+    // Firewood under the porch roof.
+    for (let i = 0; i < 4; i++) gb.add(plate(), C.trunk, [0.3 + (i % 2) * 0.045, 0.03 + Math.floor(i / 2) * 0.045, 0.36], [1.57, 0.4, 0], [0.05, 0.22, 0.05]);
+    void top;
+  },
+
+  monastery: (gb, rnd) => {
+    const top = houseBlock(gb, 0.58, 0.54, 2, rnd, { wall: C.wallCool, roof: C.slate, chimney: false });
+    // A cloister of three arches along the front, and the bell gable above.
+    for (let i = 0; i < 3; i++) {
+      const x = -0.2 + i * 0.2;
+      gb.add(post(), C.stoneLight, [x, 0.09, 0.32], [0, 0, 0], [0.05, 0.18, 0.05]);
+      gb.add(cube(), C.stoneLight, [x, 0.185, 0.32], [0, 0, 0], [0.09, 0.02, 0.07]);
+    }
+    gb.add(cube(), C.stoneLight, [0, 0.2, 0.32], [0, 0, 0], [0.56, 0.022, 0.08]);
+    gb.add(cube(), C.wallCool, [0, top + 0.1, 0.26], [0, 0, 0], [0.14, 0.2, 0.06]);
+    gb.add(cube(), C.ink, [0, top + 0.09, 0.3], [0, 0, 0], [0.07, 0.08, 0.02]);
+    gb.add(blob(), C.stoneDark, [0, top + 0.09, 0.3], [0, 0, 0], [0.05, 0.05, 0.04]);
+    chapelCross(gb, 0, top + 0.2, 0.26);
+    // A cypress in the yard, because a cloister always has one.
+    gb.add(post(), C.trunk, [-0.3, 0.1, 0.28], [0, 0, 0], [0.03, 0.2, 0.03]);
+    gb.add(cone(), C.leafDeep, [-0.3, 0.2, 0.28], [0, 0, 0], [0.14, 0.44, 0.14]);
+  },
+
+  barracks: (gb, rnd) => {
+    const top = houseBlock(gb, 0.62, 0.54, 2, rnd, { wall: C.wallCool, roof: C.slate, chimney: false });
+    // The flag over the door and the rack of pikes beside it.
+    finial(gb, 0.26, top + 0.16, 0.1, 0.26, C.roofDeep);
+    for (const sx of [-1, 1]) gb.add(post(), C.woodDark, [sx * 0.28 - 0.02, 0.14, 0.32], [0, 0, 0], [0.02, 0.28, 0.02]);
+    gb.add(cube(), C.woodDark, [-0.02, 0.24, 0.32], [0, 0, 0], [0.56, 0.016, 0.016]);
+    for (let i = 0; i < 4; i++) {
+      gb.add(post(), C.iron, [-0.2 + i * 0.12, 0.2, 0.32], [0, 0, 0.03], [0.008, 0.34, 0.008]);
+      gb.add(cone(), C.iron, [-0.2 + i * 0.12, 0.37, 0.32], [0, 0, 0], [0.022, 0.05, 0.022]);
+    }
+    // Two shields on the wall.
+    for (const sx of [-1, 1]) {
+      gb.add(plate(), C.iron, [sx * 0.14, 0.44, 0.28], [1.57, 0, 0], [0.11, 0.03, 0.11]);
+      gb.add(plate(), C.roofDeep, [sx * 0.14, 0.44, 0.29], [1.57, 0, 0], [0.075, 0.02, 0.075]);
+    }
+  },
+
+  courthouse: (gb, rnd) => {
+    const top = houseBlock(gb, 0.62, 0.54, 3, rnd, { wall: C.wall, roof: C.slate, chimney: false });
+    // A portico of four columns and a pediment over them: the law, in stone.
+    const y = 0;
+    for (let i = 0; i < 4; i++) {
+      const x = -0.24 + i * 0.16;
+      gb.add(cube(), C.stoneLight, [x, y + 0.16, 0.36], [0, 0, 0], [0.05, 0.32, 0.05]);
+      gb.add(cube(), C.stone, [x, y + 0.33, 0.36], [0, 0, 0], [0.07, 0.02, 0.07]);
+    }
+    gb.add(cube(), C.stoneLight, [0, y + 0.36, 0.36], [0, 0, 0], [0.62, 0.04, 0.1]);
+    gb.add(pyramid(), C.stoneLight, [0, y + 0.38, 0.36], [0, 0, 0], [0.6, 0.12, 0.1]);
+    gb.add(cube(), C.stoneDark, [0, y + 0.02, 0.36], [0, 0, 0], [0.64, 0.04, 0.16]);
+    // The scales over the door.
+    gb.add(post(), C.iron, [0, y + 0.5, 0.3], [0, 0, 0], [0.012, 0.16, 0.012]);
+    gb.add(cube(), C.iron, [0, y + 0.57, 0.3], [0, 0, 0], [0.2, 0.01, 0.01]);
+    for (const sx of [-1, 1]) gb.add(plate(), C.iron, [sx * 0.1, y + 0.51, 0.3], [0, 0, 0], [0.06, 0.012, 0.06]);
+    void top;
+  },
+
+  press: (gb, rnd) => {
+    houseBlock(gb, 0.56, 0.52, 2, rnd, { wall: C.wallWarm, roof: C.roof });
+    // The screw press under its own little roof: two cheeks, a screw and a wheel.
+    for (const sx of [-1, 1]) gb.add(cube(), C.woodDark, [0.28 + sx * 0.06, 0.13, 0.12], [0, 0, 0], [0.05, 0.26, 0.24]);
+    gb.add(post(), C.iron, [0.28, 0.24, 0.12], [0, 0, 0], [0.04, 0.14, 0.04]);
+    gb.add(ring(), C.iron, [0.28, 0.32, 0.12], [1.57, 0, 0], [0.2, 0.2, 0.2]);
+    gb.add(cube(), C.wood, [0.28, 0.19, 0.12], [0, 0, 0], [0.14, 0.02, 0.14]);
+    // Sheets hung out to dry on a line.
+    for (const sx of [-1, 1]) gb.add(post(), C.woodDark, [sx * 0.32, 0.16, -0.34], [0, 0, 0], [0.018, 0.32, 0.018]);
+    gb.add(cube(), C.woodDark, [0, 0.32, -0.34], [0, 0, 0], [0.66, 0.01, 0.01]);
+    for (let i = 0; i < 3; i++) gb.add(cube(), 0xf6f2e6, [-0.22 + i * 0.22, 0.24, -0.34], [0, 0, 0], [0.16, 0.16, 0.006]);
+  },
+
+  hospice: (gb, rnd) => {
+    houseBlock(gb, 0.6, 0.54, 1, rnd, { wall: C.wallCool, roof: C.roofDeep, chimney: false });
+    chapelCross(gb, 0, 0.42, 0.28);
+    for (const sx of [-1, 1]) windowBox(gb, sx * 0.2, 0.19, 0.28, 0.08, 0.1);
+    bench(gb, 0.26, 0.36, Math.PI);
+    lamp(gb, -0.28, 0.34);
+    gb.light(0, 0.32, 0.34, 0.7);
+  },
+
+  guildhall: (gb, rnd) => {
+    const top = houseBlock(gb, 0.6, 0.54, 3, rnd, { wall: C.wallWarm, roof: C.slate, chimney: false });
+    // An arcade at street level and the banners of the guilds above it.
+    for (let i = 0; i < 3; i++) {
+      const x = -0.18 + i * 0.18;
+      gb.add(cube(), C.stoneLight, [x, 0.1, 0.34], [0, 0, 0], [0.05, 0.2, 0.06]);
+    }
+    gb.add(cube(), C.stoneLight, [0, 0.21, 0.34], [0, 0, 0], [0.56, 0.03, 0.09]);
+    for (const sx of [-1, 1]) {
+      gb.add(cube(), sx < 0 ? C.roof : C.cloth, [sx * 0.14, top - 0.12, 0.29], [0, 0, 0], [0.12, 0.24, 0.01]);
+      gb.add(cube(), C.iron, [sx * 0.14, top + 0.02, 0.29], [0, 0, 0], [0.14, 0.02, 0.02]);
+    }
+    gb.light(0, 0.19, 0.38, 0.6);
+  },
+
+  horreo: (gb) => {
+    // Four stone feet, a wooden granary on top and the cross that keeps the mice away.
+    for (const [x, z] of [[-0.22, -0.18], [0.22, -0.18], [-0.22, 0.18], [0.22, 0.18]] as const) {
+      gb.add(cube(), C.stoneLight, [x, 0.07, z], [0, 0, 0], [0.09, 0.14, 0.09]);
+      gb.add(plate(), C.stone, [x, 0.15, z], [0, 0, 0], [0.14, 0.02, 0.14]);
+    }
+    gb.add(cube(), C.wood, [0, 0.27, 0], [0, 0, 0], [0.46, 0.22, 0.38]);
+    for (let i = 0; i < 5; i++) gb.add(cube(), C.woodDark, [0, 0.18 + i * 0.045, 0.19], [0, 0, 0], [0.46, 0.012, 0.012]);
+    gb.add(cube(), C.woodDark, [0, 0.38, 0], [0, 0, 0], [0.5, 0.02, 0.42]);
+    roof(gb, 0.28, 0.24, 0.14, C.roofDeep, 0.39);
+    chapelCross(gb, 0, 0.52, 0);
+    gb.add(cube(), C.door, [0.1, 0.27, 0.19], [0, 0, 0], [0.1, 0.14, 0.02]);
+  },
+
+  albarrana: (gb, rnd) => {
+    roundTower(gb, 0.02, -0.04, 0.17, 0.5);
+    gb.add(cube(), C.stoneLight, [0, 0.52, -0.04], [0, 0, 0], [0.42, 0.03, 0.42]);
+    merlons(gb, 0, -0.04, 0.42, 0.42, 0.56, 5);
+    // The neck that ties it to the wall behind.
+    gb.add(cube(), C.stone, [0, 0.13, 0.38], [0, 0, 0], [0.24, 0.26, 0.3]);
+    gb.add(cube(), C.stoneLight, [0, 0.27, 0.38], [0, 0, 0], [0.27, 0.03, 0.32]);
+    gb.add(cube(), C.ink, [0, 0.2, 0.53], [0, 0, 0], [0.1, 0.16, 0.02]);
+    void rnd;
+  },
+
+  signal: (gb, rnd) => {
+    gb.add(cube(), C.stoneDark, [0, 0.02, 0], [0, 0, 0], [0.4, 0.04, 0.4]);
+    gb.add(taper(), C.stone, [0, 0.04, 0], [0, 0, 0], [0.3, 0.4, 0.3]);
+    gb.add(plate(), C.stoneLight, [0, 0.45, 0], [0, 0, 0], [0.34, 0.02, 0.34]);
+    gb.add(cube(), C.wallCool, [0, 0.54, 0], [0, 0, 0], [0.22, 0.16, 0.22]);
+    gb.add(plate(), C.stoneLight, [0, 0.63, 0], [0, 0, 0], [0.26, 0.02, 0.26]);
+    // The mast with its two signal arms, and the lantern at the top.
+    gb.add(post(), C.woodDark, [0, 0.78, 0], [0, 0, 0], [0.03, 0.34, 0.03]);
+    for (const [y, rot] of [[0.86, 0.5], [0.94, -0.6]] as const) {
+      gb.add(cube(), C.woodDark, [0, y, 0], [0, rot, 0], [0.22, 0.016, 0.016]);
+      gb.add(cube(), C.ink, [0, y, 0], [0, rot, 0], [0.09, 0.03, 0.02]);
+    }
+    gb.add(cube(), C.lamp, [0, 0.98, 0], [0, 0, 0], [0.07, 0.08, 0.07]);
+    gb.light(0, 0.98, 0, 1.2);
+    void rnd;
+  },
+
+  ermita: (gb, rnd) => {
+    gb.add(cube(), C.stoneDark, [0, 0.012, 0], [0, 0, 0], [0.54, 0.024, 0.62]);
+    gb.add(cube(), C.stoneLight, [0, 0.16, -0.02], [0, 0, 0], [0.36, 0.28, 0.44]);
+    roof(gb, 0.23, 0.28, 0.16, C.slate, 0.3);
+    // The bell gable on the front and a cross on the ridge.
+    gb.add(cube(), C.stoneLight, [0, 0.4, 0.22], [0, 0, 0], [0.13, 0.2, 0.07]);
+    gb.add(cube(), C.ink, [0, 0.41, 0.25], [0, 0, 0], [0.07, 0.09, 0.02]);
+    gb.add(blob(), C.stoneDark, [0, 0.41, 0.25], [0, 0, 0], [0.045, 0.05, 0.04]);
+    chapelCross(gb, 0, 0.46, 0.24);
+    doorBox(gb, 0, 0.12, 0.2, 0.1, 0.19);
+    // Two cypresses flanking it, so the little chapel reads from far off.
+    for (const sx of [-1, 1]) {
+      gb.add(post(), C.trunk, [sx * 0.3, 0.08, 0.16], [0, 0, 0], [0.026, 0.16, 0.026]);
+      gb.add(cone(), C.leafDeep, [sx * 0.3, 0.16, 0.16], [0, rnd() * 3, 0], [0.12, 0.38, 0.12]);
+    }
+    gb.light(0, 0.16, 0.24, 0.6);
+  },
+
+  concejo: (gb, rnd) => {
+    gb.add(cube(), C.stoneDark, [0, 0.02, 0], [0, 0, 0], [0.42, 0.04, 0.42]);
+    gb.add(cube(), C.stone, [0, 0.32, 0], [0, 0, 0], [0.34, 0.6, 0.34]);
+    for (const k of [0.24, 0.42]) gb.add(cube(), C.stoneLight, [0, k, 0], [0, 0, 0], [0.37, 0.02, 0.37]);
+    gb.add(cube(), C.stoneLight, [0, 0.63, 0], [0, 0, 0], [0.38, 0.02, 0.38]);
+    // The balcony over the square, with its rail and the town's banner.
+    gb.add(cube(), C.stoneLight, [0, 0.44, 0.22], [0, 0, 0], [0.4, 0.02, 0.16]);
+    gb.add(cube(), C.iron, [0, 0.49, 0.29], [0, 0, 0], [0.4, 0.02, 0.012]);
+    gb.add(cube(), C.roofDeep, [0.14, 0.6, 0.2], [0, 0, 0], [0.1, 0.2, 0.008]);
+    gb.add(cube(), C.iron, [0.14, 0.71, 0.2], [0, 0, 0], [0.12, 0.02, 0.02]);
+    // Belfry and the clock of the council.
+    gb.add(cube(), C.ink, [0, 0.56, 0.17], [0, 0, 0], [0.1, 0.1, 0.02]);
+    gb.add(plate(), C.stoneLight, [0, 0.56, 0.18], [1.57, 0, 0], [0.14, 0.02, 0.14]);
+    gb.add(blob(), C.iron, [0, 0.56, 0.2], [0, 0, 0], [0.05, 0.05, 0.02]);
+    gb.light(0, 0.56, 0.24, 0.8);
+    void rnd;
+  },
+
+  twintower: (gb, rnd) => {
+    // Two drums with a bridge between them, and a roof on each.
+    for (const sx of [-1, 1]) {
+      gb.add(plate(), C.stoneDark, [sx * 0.2, 0.02, 0], [0, 0, 0], [0.28, 0.04, 0.28]);
+      gb.add(plate(), C.stone, [sx * 0.2, 0.2, 0], [0, 0, 0], [0.24, 0.36, 0.24]);
+      gb.add(plate(), C.stoneLight, [sx * 0.2, 0.39, 0], [0, 0, 0], [0.27, 0.02, 0.27]);
+      gb.add(cone(), rnd() < 0.5 ? C.slate : C.slateDeep, [sx * 0.2, 0.4, 0], [0, 0, 0], [0.3, 0.22, 0.3]);
+    }
+    gb.add(cube(), C.stone, [0, 0.3, 0], [0, 0, 0], [0.34, 0.05, 0.16]);
+    gb.add(cube(), C.stoneLight, [0, 0.33, 0], [0, 0, 0], [0.36, 0.02, 0.18]);
+    for (const sx of [-1, 1]) gb.add(cube(), C.ink, [sx * 0.2, 0.24, 0], [0, 0, 0], [0.03, 0.1, 0.02]);
+    gb.light(0, 0.3, 0.1, 0.6);
+  },
+
+  vigia: (gb, rnd) => {
+    roundTower(gb, 0, 0, 0.2, 0.42);
+    // The brazier on top: an iron basket with its fire, lit for the whole coast.
+    gb.add(plate(), C.stoneLight, [0, 0.5, 0], [0, 0, 0], [0.44, 0.03, 0.44]);
+    for (let i = 0; i < 4; i++) {
+      const a = (i * Math.PI) / 2 + 0.4;
+      gb.add(post(), C.iron, [Math.cos(a) * 0.11, 0.56, Math.sin(a) * 0.11], [0, 0, 0], [0.014, 0.1, 0.014]);
+    }
+    gb.add(plate(), C.iron, [0, 0.62, 0], [0, 0, 0], [0.26, 0.02, 0.26]);
+    gb.add(cone(), C.lamp, [0, 0.62, 0], [0, 0, 0], [0.2, 0.2, 0.2]);
+    gb.add(blob(), C.clothWarm, [0, 0.72, 0], [0, 0, 0], [0.11, 0.1, 0.11]);
+    gb.light(0, 0.74, 0, 1.6);
+    void rnd;
+  },
+
+  porticada: (gb, rnd, level, links) => {
+    builders.plaza(gb, rnd, level, links);
+    // Soportales: two rows of columns carrying a gallery, plus the lamps between.
+    const arch = (x: number, z: number, alongX: boolean): void => {
+      for (const side of [-1, 1]) {
+        const cx = alongX ? x + side * 0.3 : x;
+        const cz = alongX ? z : z + side * 0.3;
+        gb.add(cube(), C.stoneLight, [cx, 0.19, cz], [0, 0, 0], [0.055, 0.38, 0.055]);
+        gb.add(cube(), C.stone, [cx, 0.385, cz], [0, 0, 0], [0.075, 0.02, 0.075]);
+      }
+      gb.add(cube(), C.ink, [x, 0.3, z], [0, 0, 0], alongX ? [0.5, 0.26, 0.02] : [0.02, 0.26, 0.5]);
+    };
+    arch(-0.2, 0.42, true);
+    arch(0.2, 0.42, true);
+    arch(0.42, -0.2, false);
+    arch(0.42, 0.2, false);
+    gb.add(cube(), C.stoneLight, [0, 0.42, 0.42], [0, 0, 0], [0.86, 0.03, 0.1]);
+    gb.add(cube(), C.stoneLight, [0.42, 0.42, 0], [0, 0, 0], [0.1, 0.03, 0.86]);
+    lamp(gb, -0.42, 0.42);
+    lamp(gb, 0.42, 0.42);
+  },
+
+  market: (gb, rnd, level, links) => {
+    builders.plaza(gb, rnd, level, links);
+    // Three stalls with striped awnings and their crates below.
+    const tones = [C.roof, C.cloth, C.roofDeep, C.copper];
+    for (let i = 0; i < 3; i++) {
+      const x = -0.28 + i * 0.28;
+      const z = i === 1 ? -0.2 : 0.14;
+      for (const sx of [-1, 1]) gb.add(post(), C.woodDark, [x + sx * 0.1, 0.14, z], [0, 0, 0], [0.018, 0.28, 0.018]);
+      gb.add(cube(), C.wood, [x, 0.13, z], [0, 0, 0], [0.26, 0.02, 0.18]);
+      for (let k = 0; k < 3; k++) {
+        gb.add(cube(), k % 2 === 0 ? tones[i] : 0xf2ece0, [x - 0.09 + k * 0.09, 0.27, z], [0, 0, 0], [0.09, 0.012, 0.22]);
+      }
+      for (let k = 0; k < 2; k++) gb.add(blob(), i % 2 ? C.clothWarm : C.lamp, [x - 0.05 + k * 0.1, 0.15, z + 0.04], [0, k, 0], [0.06, 0.05, 0.06]);
+      crate(gb, x + 0.05, 0, z - 0.12, 0.8);
+    }
+    gb.light(0, 0.24, 0.14, 0.9);
+  },
+
+  rockgarden: (gb, rnd) => {
+    gb.add(quad(), C.lawn, [0, 0.004, 0], [0, 0, 0], [0.94, 1, 0.94]);
+    // Boulders and the plants that grow between them: no lawn stripes here.
+    for (let i = 0; i < 6; i++) {
+      const x = (rnd() - 0.5) * 0.6;
+      const z = (rnd() - 0.5) * 0.6;
+      const s = 0.14 + rnd() * 0.12;
+      gb.add(blob(), i % 3 === 0 ? C.stone : C.stoneDark, [x, s * 0.28, z], [0, rnd() * 3, 0.1], [s, s * 0.66, s * 0.86]);
+    }
+    for (let i = 0; i < 5; i++) {
+      gb.add(puff(), i % 2 ? C.leafDeep : C.leaf, [(rnd() - 0.5) * 0.7, 0.05, (rnd() - 0.5) * 0.7], [0, rnd() * 3, 0], [0.12, 0.06, 0.1]);
+    }
+    for (let i = 0; i < 6; i++) gb.add(blob(), [0xd98d6a, 0xf6d98a, 0xece4d3][i % 3], [(rnd() - 0.5) * 0.7, 0.05, (rnd() - 0.5) * 0.7], [0, 0, 0], [0.03, 0.03, 0.03]);
+    // A bench of stone, looking at the view.
+    gb.add(cube(), C.stoneDark, [0.02, 0.06, 0.36], [0, 0, 0], [0.44, 0.06, 0.14]);
+    gb.add(cube(), C.stoneLight, [0.02, 0.1, 0.36], [0, 0, 0], [0.46, 0.02, 0.15]);
+  },
+
+  rosaleda: (gb, rnd) => {
+    gb.add(quad(), C.lawn, [0, 0.004, 0], [0, 0, 0], [0.94, 1, 0.94]);
+    for (const [x, z] of [[-0.22, -0.22], [0.22, -0.22], [-0.22, 0.22], [0.22, 0.22]] as const) {
+      gb.add(cube(), C.soil, [x, 0.012, z], [0, 0, 0], [0.24, 0.02, 0.24]);
+      for (let i = 0; i < 5; i++) {
+        const px = x + (rnd() - 0.5) * 0.16;
+        const pz = z + (rnd() - 0.5) * 0.16;
+        gb.add(cube(), C.leafDeep, [px, 0.04, pz], [0, 0, 0], [0.012, 0.06, 0.012]);
+        gb.add(blob(), i % 3 === 0 ? 0xe8a0b4 : i % 3 === 1 ? 0xd97a94 : 0xf0c0cc, [px, 0.075, pz], [0, 0, 0], [0.04, 0.035, 0.04]);
+      }
+    }
+    // Two arches with roses climbing them, in the middle of the walks.
+    for (const [x, z, rot] of [[0, 0, 0], [0, 0, 1.57]] as const) {
+      for (const side of [-1, 1]) {
+        gb.add(post(), C.woodDark, [x + (rot ? side * 0.16 : 0), 0.13, z + (rot ? 0 : side * 0.16)], [0, 0, 0], [0.018, 0.26, 0.018]);
+      }
+      gb.add(cube(), C.woodDark, [x, 0.27, z], [0, rot, 0], [0.36, 0.016, 0.016]);
+      for (let i = 0; i < 4; i++) {
+        gb.add(blob(), C.leaf, [x + (rnd() - 0.5) * 0.3, 0.24 + rnd() * 0.06, z + (rnd() - 0.5) * 0.3], [0, rnd() * 3, 0], [0.08, 0.06, 0.07]);
+      }
+    }
+    bench(gb, -0.36, 0, Math.PI / 2);
+  },
+
+  botanico: (gb, rnd) => {
+    gb.add(quad(), C.lawn, [0, 0.004, 0], [0, 0, 0], [0.94, 1, 0.94]);
+    // Rows of beds, each with its little label on a stick.
+    const tones = [0x6f9a52, 0x83a758, 0x5f7f4a, 0x9ab86a];
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) {
+        const x = -0.26 + i * 0.26;
+        const z = -0.26 + j * 0.26;
+        gb.add(cube(), C.soil, [x, 0.012, z], [0, 0, 0], [0.2, 0.02, 0.2]);
+        gb.add(puff(), tones[(i + j) % tones.length], [x, 0.06, z], [0, rnd() * 3, 0], [0.16, 0.08, 0.16]);
+        gb.add(cube(), C.wood, [x + 0.11, 0.06, z + 0.11], [0, 0, 0], [0.01, 0.1, 0.01]);
+        gb.add(cube(), 0xf2ece0, [x + 0.11, 0.12, z + 0.11], [0, 0, 0], [0.06, 0.04, 0.005]);
+      }
+    }
+    // A sundial on its column, in the crossing of the walks.
+    gb.add(plate(), C.stoneDark, [0, 0.014, 0], [0, 0, 0], [0.2, 0.028, 0.2]);
+    gb.add(taper(), C.stoneLight, [0, 0.028, 0], [0, 0, 0], [0.09, 0.14, 0.09]);
+    gb.add(plate(), C.stoneLight, [0, 0.18, 0], [0, 0, 0], [0.16, 0.02, 0.16]);
+    gb.add(cube(), C.iron, [0, 0.2, 0], [0, 0.6, 0.4], [0.012, 0.09, 0.012]);
+  },
+
+  wheat: (gb, rnd) => {
+    gb.add(cube(), C.soil, [0, 0.015, 0], [0, 0, 0], [0.9, 0.03, 0.9]);
+    // Rows of ripe corn, and the sheaves tied at the corner.
+    for (let i = 0; i < 4; i++) {
+      const x = -0.3 + i * 0.2;
+      gb.add(cube(), 0xd8b45c, [x, 0.06, 0], [0, 0, 0], [0.1, 0.05, 0.8]);
+      for (let k = 0; k < 6; k++) gb.add(cone(), 0xe0c070, [x + (rnd() - 0.5) * 0.06, 0.09, -0.36 + k * 0.14], [0, rnd(), 0], [0.05, 0.06, 0.05]);
+    }
+    for (let i = 0; i < 3; i++) {
+      const x = 0.3 + (i % 2) * 0.08;
+      const z = -0.24 + Math.floor(i / 2) * 0.1;
+      gb.add(cone(), 0xe0c070, [x, 0.02, z], [0, 0, 0], [0.11, 0.16, 0.11]);
+      gb.add(plate(), C.woodDark, [x, 0.06, z], [0, 0, 0], [0.1, 0.012, 0.1]);
+    }
+  },
+
+  rice: (gb, rnd) => {
+    // Flooded terraces: the water is the field, and the shoots stand in it.
+    gb.add(cube(), C.soil, [0, 0.012, 0], [0, 0, 0], [0.92, 0.024, 0.92]);
+    for (let j = 0; j < 3; j++) {
+      const z = -0.3 + j * 0.3;
+      gb.add(cube(), C.soil, [0, 0.035, z], [0, 0, 0], [0.9, 0.03, 0.05]);
+      gb.add(quad(), C.water, [0, 0.048, z + 0.13], [0, 0, 0], [0.86, 1, 0.22]);
+      for (let i = 0; i < 5; i++) {
+        const x = -0.32 + i * 0.16;
+        gb.add(cube(), 0x7fae5c, [x, 0.07, z + 0.13 + (rnd() - 0.5) * 0.06], [0, 0, 0.2], [0.012, 0.06, 0.012]);
+        gb.add(blob(), 0x8fbf6a, [x, 0.09, z + 0.13], [0, rnd() * 3, 0], [0.05, 0.03, 0.04]);
+      }
+    }
+  },
+
+  olivar: (gb, rnd) => {
+    gb.add(cube(), C.soil, [0, 0.012, 0], [0, 0, 0], [0.9, 0.024, 0.9]);
+    // Rows of olives with their feet in a ring of dry stone.
+    for (let i = 0; i < 4; i++) {
+      const x = -0.28 + (i % 2) * 0.56;
+      const z = -0.28 + Math.floor(i / 2) * 0.56;
+      gb.add(plate(), C.stone, [x, 0.03, z], [0, 0, 0], [0.15, 0.02, 0.15]);
+      gb.add(post(), C.trunk, [x, 0.1, z], [0, 0, 0.08], [0.045, 0.16, 0.045]);
+      for (let k = 0; k < 4; k++) {
+        const a = (k * Math.PI) / 2 + 0.5;
+        gb.add(puff(), k % 2 ? 0x8fa87a : 0x9db98a, [x + Math.cos(a) * 0.08, 0.22, z + Math.sin(a) * 0.08], [0, rnd() * 3, 0], [0.13, 0.1, 0.12]);
+      }
+      gb.add(puff(), 0x9db98a, [x, 0.26, z], [0, rnd() * 3, 0], [0.16, 0.12, 0.15]);
+    }
+    // A dry stone wall along one side.
+    for (let i = 0; i < 4; i++) gb.add(cube(), C.stoneDark, [-0.34 + i * 0.22, 0.05, -0.42], [0, 0, 0], [0.2, 0.1, 0.08]);
+  },
+
+  meadow: (gb, rnd) => {
+    gb.add(quad(), C.lawn, [0, 0.005, 0], [0, 0, 0], [0.92, 1, 0.92]);
+    for (let i = 0; i < 14; i++) {
+      gb.add(blob(), i % 4 === 0 ? 0xf6d98a : C.leaf, [(rnd() - 0.5) * 0.76, 0.04, (rnd() - 0.5) * 0.76], [0, rnd() * 3, 0], [0.09, 0.05, 0.09]);
+    }
+    // Haystacks, and a little fence by the gate.
+    for (const [x, z] of [[0.3, 0.28], [-0.3, 0.3]] as const) {
+      gb.add(cone(), 0xd8b45c, [x, 0.02, z], [0, 0, 0], [0.26, 0.24, 0.26]);
+      gb.add(plate(), C.thatchDeep, [x, 0.26, z], [0, 0, 0], [0.12, 0.03, 0.12]);
+    }
+    for (let i = 0; i < 4; i++) gb.add(post(), C.woodDark, [-0.42 + i * 0.12, 0.05, 0.4], [0, 0, 0], [0.02, 0.1, 0.02]);
+    gb.add(cube(), C.woodDark, [-0.24, 0.09, 0.4], [0, 0, 0], [0.42, 0.014, 0.014]);
+  },
+
+  tidemill: (gb, rnd) => {
+    // A stone mill over the water: the wheel turns in the channel, a sluice feeds it.
+    gb.add(cube(), C.stoneDark, [0, 0.02, 0], [0, 0, 0], [0.86, 0.04, 0.86]);
+    gb.add(cube(), C.stone, [0.06, 0.2, -0.06], [0, 0, 0], [0.5, 0.32, 0.46]);
+    roof(gb, 0.3, 0.28, 0.18, C.slate, 0.36);
+    gb.add(ring(), C.wood, [-0.28, 0.14, 0.16], [0.4, 0.2, 0], [0.5, 0.5, 0.5]);
+    for (let i = 0; i < 6; i++) {
+      const a = (i * Math.PI) / 3;
+      gb.add(cube(), C.woodDark, [-0.28 + Math.cos(a) * 0.12, 0.14 + Math.sin(a) * 0.12, 0.16], [0.4, 0, 0], [0.02, 0.26, 0.02]);
+    }
+    gb.add(plate(), C.iron, [-0.28, 0.14, 0.16], [1.57, 0.2, 0], [0.07, 0.04, 0.07]);
+    gb.add(cube(), C.woodDark, [0.06, 0.06, 0.34], [0, 0, 0], [0.3, 0.12, 0.06]);
+    gb.add(quad(), C.water, [-0.24, 0.05, 0.16], [0, 0, 0], [0.34, 1, 0.3]);
+    gb.light(0.06, 0.16, 0.18, 0.7);
+    void rnd;
+  },
+
+  sawmill: (gb, rnd) => {
+    gb.add(cube(), C.stoneDark, [0, 0.02, 0], [0, 0, 0], [0.84, 0.04, 0.84]);
+    gb.add(cube(), C.wood, [0.06, 0.16, -0.14], [0, 0, 0], [0.52, 0.24, 0.4]);
+    roof(gb, 0.32, 0.26, 0.12, C.thatchDeep, 0.28);
+    // The saw: a frame with a long blade, the log it is opening, and the lean-to
+    // that keeps the rain off: without its roof the frame reads as scaffolding.
+    for (const sx of [-1, 1]) gb.add(post(), C.woodDark, [sx * 0.18, 0.18, 0.24], [0, 0, 0], [0.03, 0.36, 0.03]);
+    gb.add(cube(), C.woodDark, [0, 0.36, 0.24], [0, 0, 0], [0.42, 0.03, 0.03]);
+    gb.add(cube(), C.thatchDeep, [0, 0.4, 0.26], [0.12, 0, 0], [0.46, 0.02, 0.26]);
+    gb.add(cube(), C.iron, [0, 0.22, 0.24], [0, 0, 0], [0.34, 0.12, 0.012]);
+    for (let i = 0; i < 6; i++) gb.add(cube(), C.stoneLight, [-0.15 + i * 0.06, 0.18, 0.254], [0, 0, 0], [0.016, 0.02, 0.008]);
+    gb.add(plate(), C.trunk, [0, 0.08, 0.3], [1.57, 0, 0], [0.1, 0.4, 0.1]);
+    // Logs waiting their turn, stacked crosswise.
+    for (let i = 0; i < 4; i++) {
+      gb.add(plate(), C.trunk, [-0.3 + (i % 2) * 0.09, 0.05 + Math.floor(i / 2) * 0.08, -0.3], [1.57, 0.6, 0], [0.07, 0.34, 0.07]);
+    }
+    gb.light(0.06, 0.16, 0.1, 0.6);
+    void rnd;
+  },
+
+  postmill: (gb, rnd) => {
+    // A post mill on its mound: the whole house turns on one oak post.
+    gb.add(cube(), C.stoneDark, [0, 0.02, 0], [0, 0, 0], [0.72, 0.04, 0.72]);
+    gb.add(plate(), C.stone, [0, 0.03, 0], [0, 0, 0], [0.5, 0.06, 0.5]);
+    gb.add(post(), C.trunk, [0, 0.19, 0], [0, 0, 0], [0.14, 0.32, 0.14]);
+    gb.add(cube(), C.wood, [0, 0.4, 0], [0, 0.3, 0], [0.42, 0.3, 0.4]);
+    roof(gb, 0.26, 0.24, 0.16, C.thatchDeep, 0.55);
+    // The sails, four of them, and the tail pole that turns it into the wind.
+    gb.add(plate(), C.woodDark, [0, 0.56, 0.12], [1.57, 0, 0], [0.1, 0.05, 0.1]);
+    for (let i = 0; i < 4; i++) {
+      const a = (i * Math.PI) / 2;
+      gb.add(cube(), C.wood, [Math.cos(a) * 0.22, 0.56 + Math.sin(a) * 0.22, 0.14], [0, 0, a], [0.03, 0.42, 0.02]);
+      gb.add(cube(), C.cloth, [Math.cos(a) * 0.3, 0.56 + Math.sin(a) * 0.3, 0.14], [0, 0, a], [0.13, 0.3, 0.006]);
+    }
+    gb.add(post(), C.woodDark, [0, 0.2, -0.32], [0.5, 0, 0], [0.03, 0.42, 0.03]);
+    gb.light(0.1, 0.4, 0.16, 0.6);
+    void rnd;
+  },
+
+  fishmarket: (gb, rnd, _level, links) => {
+    builders.dock(gb, rnd, 1, links);
+    // A stall of fish on the boards, its awning and the crates of the catch.
+    gb.add(cube(), C.wood, [-0.16, 0.14, 0.1], [0, 0, 0], [0.4, 0.02, 0.2]);
+    for (const sx of [-1, 1]) gb.add(post(), C.woodDark, [-0.16 + sx * 0.18, 0.2, 0.1], [0, 0, 0], [0.018, 0.14, 0.018]);
+    for (let i = 0; i < 3; i++) gb.add(cube(), i % 2 ? C.cloth : 0xf2ece0, [-0.25 + i * 0.09, 0.3, 0.1], [0, 0, 0], [0.09, 0.012, 0.24]);
+    for (let i = 0; i < 4; i++) gb.add(blob(), i % 2 ? 0x9fb8c4 : 0xc4d4dc, [-0.3 + i * 0.09, 0.16, 0.06 + (i % 2) * 0.08], [0, i, 0], [0.09, 0.03, 0.05]);
+    for (let i = 0; i < 2; i++) crate(gb, 0.3 - i * 0.02, 0.08, 0.24 + i * 0.12, 0.9);
+    gb.light(-0.16, 0.28, 0.14, 0.7);
+  },
+
+  shipyard: (gb, rnd, _level, links) => {
+    builders.dock(gb, rnd, 1, links);
+    // The ribs of a boat being built, and the timbers beside it.
+    for (let i = 0; i < 5; i++) {
+      const z = -0.3 + i * 0.15;
+      const w = 0.3 + Math.sin((i / 4) * Math.PI) * 0.16;
+      gb.add(cube(), C.wood, [-0.1, 0.12, z], [0, 0, 0], [w, 0.02, 0.03]);
+      gb.add(post(), C.woodDark, [-0.1 - w / 2, 0.14, z], [0, 0, 0], [0.02, 0.14, 0.02]);
+      gb.add(post(), C.woodDark, [-0.1 + w / 2, 0.14, z], [0, 0, 0], [0.02, 0.14, 0.02]);
+    }
+    gb.add(cube(), C.woodDark, [-0.1, 0.06, 0], [0, 0, 0], [0.2, 0.02, 0.62]);
+    for (let i = 0; i < 4; i++) gb.add(plate(), C.trunk, [0.28, 0.1 + Math.floor(i / 2) * 0.08, -0.24 + (i % 2) * 0.1], [1.57, 0.2, 0], [0.06, 0.3, 0.06]);
+  },
+
+  cargodock: (gb, rnd, level, links) => {
+    builders.dock(gb, rnd, Math.max(2, level), links);
+    // A crane of its own and the cargo stacked on the boards.
+    gb.add(post(), C.woodDark, [-0.28, 0.36, -0.3], [0, 0, 0], [0.06, 0.56, 0.06]);
+    gb.add(cube(), C.woodDark, [-0.12, 0.58, -0.3], [0, 0, 0], [0.34, 0.04, 0.04]);
+    gb.add(cube(), 0xb8a68a, [-0.02, 0.5, -0.3], [0, 0, 0], [0.01, 0.16, 0.01]);
+    crate(gb, -0.02, 0.36, -0.3, 1.1);
+    for (let i = 0; i < 4; i++) crate(gb, 0.16 + (i % 2) * 0.14, 0.08 + Math.floor(i / 2) * 0.1, 0.2, 1);
+    gb.add(plate(), 0xc4633f, [0.34, 0.16, 0.36], [0, 0, 0], [0.12, 0.14, 0.12]);
+    gb.add(plate(), C.iron, [0.34, 0.23, 0.36], [0, 0, 0], [0.125, 0.02, 0.125]);
+  },
+
+  saltpans: (gb, rnd, _level, links) => {
+    builders.dock(gb, rnd, 1, links);
+    // Shallow pans of brining water, and the salt already raked into heaps.
+    for (let i = 0; i < 3; i++) {
+      const x = -0.28 + i * 0.26;
+      gb.add(cube(), C.stone, [x, 0.088, 0.14], [0, 0, 0], [0.22, 0.012, 0.3]);
+      // The rim of dried salt around the brine.
+      for (const [dx, dz, w, d] of [[0, 0.14, 0.22, 0.02], [0, -0.14, 0.22, 0.02], [-0.1, 0, 0.02, 0.3], [0.1, 0, 0.02, 0.3]] as const) {
+        gb.add(cube(), C.stoneLight, [x + dx, 0.1, 0.14 + dz], [0, 0, 0], [w, 0.024, d]);
+      }
+      gb.add(quad(), 0xe4eff1, [x, 0.098, 0.14], [0, 0, 0], [0.16, 1, 0.24]);
+    }
+    for (const [x, z] of [[0.28, -0.16], [-0.3, -0.22]] as const) {
+      gb.add(cone(), 0xf4f7f9, [x, 0.09, z], [0, 0, 0], [0.16, 0.1, 0.16]);
+    }
+    gb.light(0.1, 0.16, 0.2, 0.5);
+  },
+
+  wallwalk: (gb, rnd, level, links) => {
+    builders.street(gb, rnd, level, links);
+    // The parapet on one side and the torches along it.
+    gb.add(cube(), C.stoneDark, [0, 0.045, -0.4], [0, 0, 0], [0.98, 0.09, 0.14]);
+    gb.add(cube(), C.stone, [0, 0.11, -0.4], [0, 0, 0], [0.98, 0.05, 0.12]);
+    for (let i = 0; i < 3; i++) gb.add(cube(), C.stoneLight, [-0.3 + i * 0.3, 0.15, -0.4], [0, 0, 0], [0.12, 0.04, 0.14]);
+    gb.add(post(), C.woodDark, [0.34, 0.16, -0.38], [0, 0, 0], [0.024, 0.32, 0.024]);
+    gb.add(cube(), C.lamp, [0.34, 0.35, -0.38], [0, 0, 0], [0.06, 0.07, 0.06]);
+    gb.light(0.34, 0.36, -0.38, 0.9);
+  },
+
+  avenue: (gb, rnd, level, links) => {
+    builders.street(gb, rnd, level, links);
+    // A double row of lindens, with a bench between them and a lamp at the end.
+    for (const z of [-0.34, 0.34]) {
+      for (const x of [-0.24, 0.24]) {
+        gb.add(post(), C.trunk, [x, 0.12, z], [0, 0, 0], [0.035, 0.24, 0.035]);
+        gb.add(plate(), C.leafDeep, [x, 0.28, z], [0, rnd() * 3, 0], [0.3, 0.16, 0.3]);
+        gb.add(puff(), C.leaf, [x, 0.34, z], [0, rnd() * 3, 0], [0.26, 0.18, 0.26]);
+      }
+    }
+    bench(gb, 0, -0.1, 0);
+    lamp(gb, 0.42, 0.42);
+  },
+
+  willow: (gb, rnd) => {
+    // A willow by the water: a stout trunk and a curtain of thin fronds.
+    gb.add(cone(), C.trunk, [0, 0, 0], [0, 0, 0], [0.08, 0.05, 0.08]);
+    gb.add(taper(), C.trunk, [0, 0.02, 0], [0, 0, 0], [0.06, 0.3, 0.06]);
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 + rnd() * 0.3;
+      const r = 0.16 + rnd() * 0.12;
+      gb.add(cube(), i % 2 ? C.leaf : C.leafDeep, [Math.cos(a) * r, 0.26 + rnd() * 0.1, Math.sin(a) * r], [0, a, 0.12], [0.03, 0.24 + rnd() * 0.1, 0.02]);
+    }
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      gb.add(puff(), C.leafDeep, [Math.cos(a) * 0.1, 0.34, Math.sin(a) * 0.1], [0, rnd() * 3, 0], [0.2, 0.12, 0.2]);
+    }
+    gb.add(puff(), C.leaf, [0, 0.4, 0], [0, 0, 0], [0.24, 0.14, 0.24]);
+  },
+
+  olive: (gb, rnd) => {
+    // An old olive: a twisted trunk, a silver crown and a ring of stones.
+    gb.add(plate(), C.stone, [0, 0.02, 0], [0, 0, 0], [0.3, 0.03, 0.3]);
+    gb.add(taper(), C.trunk, [0, 0.02, 0], [0.1, 0.4, 0.14], [0.11, 0.16, 0.11]);
+    gb.add(taper(), C.trunk, [0.02, 0.14, 0.01], [-0.12, 1.2, -0.1], [0.08, 0.18, 0.08]);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + 0.3;
+      gb.add(puff(), i % 2 ? 0x9db98a : 0x8fa87a, [Math.cos(a) * 0.12, 0.3 + rnd() * 0.06, Math.sin(a) * 0.12], [0, rnd() * 3, 0], [0.18, 0.11, 0.17]);
+    }
+    gb.add(puff(), 0xa8c096, [0, 0.38, 0], [0, rnd() * 3, 0], [0.2, 0.12, 0.2]);
+  },
+
+  hedge: (gb, rnd) => {
+    // A clipped hedge with its arch, and the gravel of a garden path under it.
+    gb.add(quad(), C.path, [0, 0.006, 0], [0, 0, 0], [0.8, 1, 0.9]);
+    gb.add(cube(), C.leafDeep, [0, 0.11, -0.34], [0, 0, 0], [0.86, 0.22, 0.2]);
+    gb.add(cube(), C.leaf, [0, 0.225, -0.34], [0, 0, 0], [0.82, 0.04, 0.18]);
+    for (let i = 0; i < 4; i++) gb.add(puff(), i % 2 ? C.leafDeep : C.leaf, [-0.3 + i * 0.2, 0.24, -0.34], [0, rnd() * 3, 0], [0.12, 0.06, 0.14]);
+    // The arch: two pillars with a crown of leaves, wide enough to walk through.
+    for (const sx of [-1, 1]) gb.add(cube(), C.leafDeep, [sx * 0.24, 0.22, 0.02], [0, 0, 0], [0.14, 0.44, 0.16]);
+    gb.add(cube(), C.leaf, [0, 0.46, 0.02], [0, 0, 0], [0.62, 0.08, 0.18]);
+    gb.add(puff(), C.leaf, [0, 0.5, 0.02], [0, rnd() * 3, 0], [0.18, 0.08, 0.18]);
+  },
+
+  summitpine: (gb, rnd) => {
+    // A pine of the ridge, growing out of the rock.
+    for (let i = 0; i < 3; i++) {
+      gb.add(blob(), i % 2 ? C.stone : C.stoneDark, [(rnd() - 0.5) * 0.5, 0.04, (rnd() - 0.5) * 0.5], [0, rnd() * 3, 0], [0.2, 0.1, 0.18]);
+    }
+    gb.add(taper(), C.trunk, [0, 0.04, 0], [0, 0, 0], [0.05, 0.5, 0.05]);
+    for (let i = 0; i < 4; i++) {
+      const v = i / 3;
+      gb.add(cone(), i === 3 ? C.leafLight : C.leafDeep, [0, 0.3 + v * 0.34, 0], [0, rnd() * 3, 0], [0.42 - v * 0.26, 0.22 - v * 0.06, 0.42 - v * 0.26]);
+    }
+    void rnd;
+  },
+
+  aqueduct: (gb, rnd, level, links) => {
+    // A range of arches carrying the channel: three piers, the vaults between
+    // them, and the water on top. A slab on legs is a table, not an aqueduct.
+    const axisX = (links & (LINK_E | LINK_W)) !== 0 || (links & (LINK_N | LINK_S)) === 0;
+    const along = (v: number, u: number): [number, number, number] => (axisX ? [v, 0, u] : [u, 0, v]);
+    const size = (w: number, h: number, d: number): [number, number, number] => (axisX ? [w, h, d] : [d, h, w]);
+    gb.add(cube(), C.stoneDark, along(0, 0.5 * 0), [0, 0, 0], size(1.02, 0.04, 0.3));
+    for (const v of [-0.36, 0, 0.36]) {
+      const [px, , pz] = along(v, 0);
+      gb.add(cube(), C.stone, [px, 0.21, pz], [0, 0, 0], size(0.13, 0.38, 0.24));
+      gb.add(cube(), C.stoneLight, [px, 0.4, pz], [0, 0, 0], size(0.16, 0.03, 0.27));
+    }
+    // The two vaults: five short blocks following a semicircle each.
+    for (const v of [-0.18, 0.18]) {
+      for (let i = 0; i < 5; i++) {
+        const a = (Math.PI * i) / 4;
+        const [px, , pz] = along(v + Math.cos(a) * 0.11, 0);
+        gb.add(cube(), C.stone, [px, 0.26 + Math.sin(a) * 0.11, pz], [0, 0, axisX ? a - Math.PI / 2 : 0], size(0.09, 0.04, 0.22));
+      }
+    }
+    // The channel: a trough of stone with its thread of water.
+    gb.add(cube(), C.stone, along(0, 0), [0, 0, 0], size(1.02, 0.055, 0.26));
+    gb.add(cube(), C.stoneLight, along(0, 0), [0, 0, 0], size(1.04, 0.016, 0.3));
+    gb.add(cube(), C.water, [0, 0.44, 0], [0, 0, 0], size(1.02, 0.012, 0.14));
+    gb.add(cube(), mixHex(C.leafDeep, C.stoneDark, 0.35), along(0.2, 0.13), [0, 0, 0], size(0.2, 0.02, 0.05));
+    void level;
+    void rnd;
+  },
+
+  battery: (gb, rnd, level, links) => {
+    wallRun(gb, links, { height: 0.26 + (level - 1) * 0.08, thick: 0.24, merlon: true });
+    // Two cannon behind their embrasures, pointing out to sea.
+    for (const sx of [-1, 1]) {
+      gb.add(cube(), C.woodDark, [sx * 0.14, 0.06, 0.1], [0, 0, 0], [0.16, 0.05, 0.12]);
+      gb.add(post(), C.iron, [sx * 0.14, 0.09, 0.06], [1.45, 0, 0], [0.07, 0.26, 0.07]);
+      gb.add(plate(), C.iron, [sx * 0.14, 0.075, 0.19], [1.45, 0, 0], [0.09, 0.03, 0.09]);
+      for (let i = 0; i < 2; i++) gb.add(plate(), C.woodDark, [sx * 0.14 + (i ? 0.05 : -0.05), 0.03, 0.12], [0, 0, 0], [0.07, 0.06, 0.07]);
+    }
+    for (let i = 0; i < 4; i++) gb.add(blob(), C.iron, [-0.3 + i * 0.2, 0.045, -0.06], [0, i, 0], [0.06, 0.05, 0.06]);
+    void rnd;
+  },
+
+  orchardwall: (gb, rnd, _level, links) => {
+    // A low garden wall with fruit trees trained along it.
+    wallRun(gb, links, { height: 0.16, thick: 0.14 }, false);
+    gb.add(cube(), C.stone, [0, 0.2, 0], [0, 0, 0], [0.98, 0.06, 0.18]);
+    gb.add(cube(), C.stoneLight, [0, 0.235, 0], [0, 0, 0], [1.0, 0.02, 0.2]);
+    for (let i = 0; i < 4; i++) {
+      const x = -0.33 + i * 0.22;
+      gb.add(post(), C.trunk, [x, 0.3, 0], [0, 0, 0.08], [0.018, 0.16, 0.018]);
+      gb.add(cube(), C.leafDeep, [x, 0.4, 0], [0, 0, 0], [0.19, 0.03, 0.1]);
+      gb.add(puff(), C.leaf, [x, 0.44, 0], [0, rnd() * 3, 0], [0.15, 0.06, 0.1]);
+      for (let k = 0; k < 2; k++) gb.add(blob(), 0xc4633f, [x - 0.05 + k * 0.1, 0.38, 0.06], [0, k, 0], [0.035, 0.035, 0.03]);
+    }
+  },
+
 };
 
 export function buildRole(role: Role, level: number, gb: GeoBuilder, rnd: () => number, links = 0): void {

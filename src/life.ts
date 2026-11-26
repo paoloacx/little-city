@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { HALF, key, rng, worldX, worldZ } from './grid';
 import { Light } from './geo';
 import { Resolved } from './rules';
+import { crowdSize, population } from './census';
 import { GeoBuilder, ball, blob, cone, cube, plate, post } from './geo';
 import { ringTexture, shadowMaterial, smokeMaterial, weatherMaterial } from './materials';
 import { Weather } from './season';
@@ -219,7 +220,12 @@ export class Life {
     const random = rng((seed ^ 0x2545f491) >>> 0);
     const { roads, squares, roadKeys, plazas } = this.layout(resolved);
 
-    // People walking: about one per street tile, with a soft cap for phones.
+    // Who is out and about comes from the census: a town of mills has nobody in
+    // the street because nobody lives in it. A phone can take fewer figures, so
+    // it also draws fewer.
+    const crowd = typeof window !== 'undefined' && window.innerWidth < 720 ? 0.55 : 1;
+    const people = population(resolved);
+    const { walkers, idlers } = crowdSize(people, crowd);
     const doorsteps: Resolved[] = [];
     for (const cell of resolved.values()) {
       if (cell.role !== 'house' && cell.role !== 'townhouse' && cell.role !== 'cottage') continue;
@@ -231,9 +237,6 @@ export class Life {
       }
     }
     const starts = [...roads.values(), ...doorsteps, ...squares];
-    // A phone can take fewer people: half the figures, half the draw calls.
-    const crowd = typeof window !== 'undefined' && window.innerWidth < 720 ? 0.55 : 1;
-    const walkers = Math.min(26, Math.max(0, Math.floor(((roads.size + squares.length) / 0.95) * crowd)));
     for (let i = 0; i < walkers && starts.length > 0; i++) {
       const start = starts[Math.floor(random() * starts.length)];
       const path = this.walk(start, roadKeys, random);
@@ -257,7 +260,6 @@ export class Life {
     }
 
     // People standing about the square, never inside the bandstand.
-    const idlers = Math.min(22, Math.ceil(plazas.length * 1.8 * crowd));
     for (let i = 0; i < idlers && plazas.length > 0; i++) {
       const spot = plazas[Math.floor(random() * plazas.length)];
       const figure = this.figure(random, random() < 0.22 ? 0.235 : 0.29 + random() * 0.03);

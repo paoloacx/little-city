@@ -1,6 +1,23 @@
 import './style.css';
 
-import { BLOCK_DEFS, BlockKind, MAX_GROUND, MAX_LEVEL, Town, UNLOCK_AT, key, landAt, loadSaved, saveTown } from './grid';
+import {
+  BLOCK_DEFS,
+  BlockKind,
+  EXPANSIONS,
+  GRID,
+  MAX_GROUND,
+  MAX_LEVEL,
+  Town,
+  UNLOCK_AT,
+  islandFor,
+  key,
+  landAt,
+  loadSaved,
+  saveTown,
+  BASE_GRID,
+  setGridSize,
+} from './grid';
+import { population } from './census';
 import { ROLES, SPECIAL_COUNT } from './rules';
 import { growTown } from './grow';
 import { World } from './scene';
@@ -21,6 +38,7 @@ const canvas = document.getElementById('town') as HTMLCanvasElement;
 const paletteEl = document.getElementById('palette') as HTMLDivElement;
 const countEl = document.getElementById('found-count') as HTMLElement;
 const totalEl = document.getElementById('found-total') as HTMLElement;
+const expandEl = document.getElementById('expand') as HTMLButtonElement;
 const lastEl = document.getElementById('found-last') as HTMLElement;
 const hintEl = document.querySelector('.lc-hint') as HTMLElement;
 const growEl = document.getElementById('grow') as HTMLButtonElement;
@@ -46,6 +64,10 @@ let tool: Tool = 'house';
 let town: Town;
 const found = new Set<string>();
 let recent: string[] = [];
+/** Who lives here now: the census of the town as it stands. */
+let people = 0;
+/** True while the coast under the town came from a real place on the map. */
+let realPlace = false;
 
 /* ---------------------------------------------------------------- the town */
 
@@ -105,6 +127,7 @@ world.setSeed(town.seed);
 const cachedPlace = readAnyCache();
 if (cachedPlace && seedOf(cachedPlace.lat, cachedPlace.lon) === town.seed) {
   world.setIsland(cachedPlace.mask);
+  realPlace = true;
 }
 /**
  * A town with a name and a census: the seed picks the place, and the blocks you
@@ -135,6 +158,7 @@ function paintTownName(): void {
   const { name, title } = townTitle(town.seed, blocks.length);
   const top = blocks.reduce((most, b) => Math.max(most, b.level), 0);
   const parts = [
+    `${people} ${people === 1 ? 'habitante' : 'habitantes'}`,
     `${houses} ${houses === 1 ? 'casa' : 'casas'}`,
     `${streets} ${streets === 1 ? 'calle' : 'calles'}`,
     `${trees} ${trees === 1 ? 'árbol' : 'árboles'}`,
@@ -240,6 +264,7 @@ function unlockedNow(): Set<BlockKind> {
 /** Rebuilds the world and collects any discovery the town now holds. */
 function resolve(announce: boolean): void {
   const resolved = world.rebuild(town);
+  people = population(resolved);
   const fresh: string[] = [];
   for (const cell of resolved.values()) {
     if (!ROLES[cell.role].special) continue;
@@ -260,6 +285,7 @@ function syncClicks(): void {
 
 function syncPanel(): void {
   paintTownName();
+  syncExpand();
   countEl.textContent = String(found.size);
   if (recent.length === 0) {
     lastEl.textContent = found.size
@@ -281,6 +307,125 @@ function apply(): void {
 function save(): void {
   saveTown(town, found, clicks);
 }
+
+/* ------------------------------------------------------------ more ground */
+
+/** The next ring of cells, or null when the island has no more to give. */
+function nextExpansion(): { size: number; finds: number } | null {
+  return EXPANSIONS.find((step) => step.size > GRID) ?? null;
+}
+
+/** Keeps the button honest: what it gives, and what it costs. */
+function syncExpand(): void {
+  const step = nextExpansion();
+  if (!step) {
+    expandEl.textContent = `Isla al completo: ${GRID} × ${GRID}`;
+    expandEl.disabled = true;
+    expandEl.setAttribute('aria-disabled', 'true');
+    return;
+  }
+  const ready = found.size >= step.finds;
+  expandEl.textContent = ready
+    ? `Ampliar a ${step.size} × ${step.size}`
+    : `Ampliar: ${step.finds} hallazgos`;
+  expandEl.disabled = !ready;
+  expandEl.setAttribute('aria-disabled', String(!ready));
+}
+
+/**
+ * Buys the next ring of land. Every cell keeps its place in the island, so the
+ * town, the hills and the coast move together: the town is shifted by the width
+ * of the ring and the board is redrawn around it.
+ */
+function expandIsland(): void {
+  const step = nextExpansion();
+  if (!step) {
+    toast('La isla ya no da más de sí');
+    return;
+  }
+  if (realPlace) {
+    toast('Un lugar real no se amplía: usa una isla dibujada');
+    return;
+  }
+  if (found.size < step.finds) {
+    toast(`Se amplía con ${step.finds} hallazgos: llevas ${found.size}`);
+    return;
+  }
+  const ring = (step.size - GRID) / 2;
+  const shift = <T>(map: Map<string, T>): Map<string, T> =>
+    new Map(
+      [...map].map(([k, v]) => {
+        const [x, z] = k.split(',').map(Number);
+        return [key(x + ring, z + ring), v] as [string, T];
+      }),
+    );
+  town = {
+    seed: town.seed,
+    blocks: shift(town.blocks),
+    ground: town.ground ? shift(town.ground) : undefined,
+  };
+  const oldMask = world.islandMask;
+  setGridSize(step.size);
+  const mask = islandFor(town.seed, step.size);
+  // A bridge or a jetty that stood on water keeps its water: the new shore grows
+  // around the harbour instead of stranding it on dry land.
+  for (const [k, placed] of town.blocks) {
+    if (placed.kind !== 'dock' && placed.kind !== 'path') continue;
+    const [x, z] = k.split(',').map(Number);
+    if (oldMask[z - ring]?.[x - ring] === false) mask[z][x] = false;
+  }
+  // A jetty the old shore left far out to sea is taken down: the island grows up to
+  // its harbour, never around a pier moored to nothing. Whole chains go together.
+  const neighbours = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ] as const;
+  const cellOf = (k: string): [number, number] => k.split(',').map(Number) as [number, number];
+  const wet = new Set<string>();
+  for (const [k, placed] of town.blocks) {
+    if (placed.kind !== 'dock' && placed.kind !== 'path') continue;
+    const [x, z] = cellOf(k);
+    if (mask[z]?.[x] === false) wet.add(k);
+  }
+  const seen = new Set<string>();
+  const stranded: string[] = [];
+  for (const start of wet) {
+    if (seen.has(start)) continue;
+    seen.add(start);
+    const group = [start];
+    let moored = false;
+    for (let i = 0; i < group.length; i += 1) {
+      const [x, z] = cellOf(group[i]);
+      for (const [dx, dz] of neighbours) {
+        if (mask[z + dz]?.[x + dx] === true) moored = true;
+        const n = key(x + dx, z + dz);
+        if (!wet.has(n) || seen.has(n)) continue;
+        seen.add(n);
+        group.push(n);
+      }
+    }
+    if (!moored) stranded.push(...group);
+  }
+  for (const k of stranded) town.blocks.delete(k);
+  // A structural change: the history of the old board no longer lines up.
+  undoStack.length = 0;
+  undoEl.disabled = true;
+  world.setIsland(mask);
+  resolve(true);
+  syncPanel();
+  world.refit();
+  save();
+  toast(
+    `Más terreno: ${step.size} × ${step.size} casillas` +
+      (stranded.length
+        ? ` · ${stranded.length} muelle${stranded.length === 1 ? '' : 's'} recogido${stranded.length === 1 ? '' : 's'}: la costa se alejó`
+        : ''),
+  );
+}
+
+expandEl.addEventListener('click', expandIsland);
 
 /* --------------------------------------------------------------- the toast */
 
@@ -765,6 +910,9 @@ rotateEl.addEventListener('click', () => rotateBlock());
 
 growEl.addEventListener('click', () => {
   pushHistory();
+  // A new town starts on the small board: the land is won, not inherited.
+  setGridSize(BASE_GRID);
+  realPlace = false;
   town = growTown((Math.random() * 1e9) | 0);
   clicks = 0;
   world.setSeed(town.seed);
@@ -872,6 +1020,8 @@ seasonEl.addEventListener('click', () => applySeason(nextSeason(), true));
  * is yours to change, like any other.
  */
 function applyPlace(place: Place): void {
+  setGridSize(BASE_GRID);
+  realPlace = true;
   const seed = seedOf(place.lat, place.lon);
   town = { seed, blocks: new Map() };
   for (const block of place.blocks) {
@@ -931,6 +1081,7 @@ const savesEl = document.getElementById('saves') as HTMLButtonElement;
 function currentSlot(): SlotData {
   return {
     seed: town.seed,
+    size: GRID,
     ground: [...(town.ground ?? new Map<string, number>())].map(([k, level]) => {
       const [x, z] = k.split(',').map(Number);
       return [x, z, level] as [number, number, number];
@@ -947,6 +1098,11 @@ function currentSlot(): SlotData {
 
 function loadSlot(data: SlotData): void {
   pushHistory();
+  // The board comes back with the town: a pueblo that bought land keeps it.
+  const size = data.size ?? BASE_GRID;
+  setGridSize(size);
+  realPlace = false;
+  world.setIsland(size === BASE_GRID ? null : islandFor(data.seed, size));
   town = {
     seed: data.seed,
     blocks: new Map(data.blocks.map(([x, z, kind, level, rot]) => [key(x, z), { kind, level, rot: rot ?? 0 }])),

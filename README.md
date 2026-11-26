@@ -3,8 +3,8 @@
 Un diorama de pueblo dibujado a mano, en el navegador: colocas bloques en una isla y cada uno se
 convierte en algo distinto según sus vecinos y su altura, hasta cinco pisos. Es un MVP propio,
 inspirado en la mecánica de [Little City](https://littlecity.io) de Derek Yao, sin usar su código ni
-su arte: **63 formas** distintas, **53 hallazgos**, bloques que se desbloquean jugando y cuatro islas
-distintas.
+su arte: **147 formas** distintas, **100 hallazgos**, un censo que cuenta a la gente que vive en lo que
+construyes, una isla que se puede ampliar dos veces ganando terreno al mar y cuatro islas distintas.
 
 ```bash
 npm install
@@ -25,6 +25,14 @@ npm run preview  # sirve dist/
   arboreto; una **muralla**, por muralla, torreón, fortaleza y alcázar.
 - Los bloques se ganan: **Campo** con 2 hallazgos, **Muelle** con 4, **Molino** con 6, **Jardín** con
   10 y **Muralla** con 16. La paleta enseña el candado y lo que falta; al llegar, avisa.
+- **La isla se amplía.** Con **40 hallazgos** el botón **Ampliar** abre el tablero de 15 a **17 × 17**
+  casillas, y con **50**, hasta **19 × 19**: la costa crece hacia fuera, la que ya tenías no se mueve y
+  el muelle que estaba en el agua conserva su agua. El censo, los hallazgos, las colinas y el pueblo
+  entero viajan con el tablero nuevo (también en el enlace y en los pueblos guardados).
+- **El censo cuenta personas.** Cada casa da camas según sus pisos y su oficio: una casa de un piso
+  son cuatro; un palacio, veinte y tres más por planta; el cuartel, el hospital o la lonja también
+  tienen gente. **Un pueblo de molinos y campos no tiene a nadie viviendo**, y no verás a nadie por la
+  calle: la gente sale de las casas que construyes.
 - Los vecinos también mandan, y cambian en cuanto cambias una altura: la primera regla que encaja
   decide lo que se dibuja. Además, **una casa pegada a algo mucho más alto gana un piso** (sin
   romperse): el pueblo crece hacia dentro, no se pisa.
@@ -35,7 +43,7 @@ npm run preview  # sirve dist/
   **dunas** o **roquedo**, con sus flores, setas, conchas o peñascos. **Vaciar** deja la isla en
   blanco.
 - **Compartir** copia un enlace con el pueblo dentro (el estado va en el `#` de la URL, sin servidor);
-  **Postal** descarga el diorama en PNG; **Guía** lista los 53 hallazgos; **Pueblos** guarda tres
+  **Postal** descarga el diorama en PNG; **Guía** lista los 100 hallazgos; **Pueblos** guarda tres
   partidas en el navegador para volver a ellas; **Foto** esconde la interfaz (Esc sale); **Sonido**
   enciende el viento y las gaviotas; **Ciclo** pone el día y la noche en marcha; **Estación** da la
   vuelta al año y **Lugar real** dibuja un barrio de OpenStreetMap en el tablero.
@@ -85,7 +93,7 @@ Y lo que pasa alrededor:
   casillas de alrededor, sin que nada se pierda.
 - La guía muestra los hallazgos que ya has visto y los que faltan en gris.
 
-## Los 53 hallazgos
+## Los 100 hallazgos
 
 Los edificios se pueden girar: con el botón **Girar** o la tecla **R**, sobre el que esté bajo el
 puntero o sobre el último que pusiste. Un cuarto de vuelta cada vez, y el giro se guarda con el
@@ -101,54 +109,106 @@ Cada casilla se resuelve a partir de sus vecinos y de sus pisos. Manda la primer
 
 | Regla | Se vuelve | Cuándo |
 |---|---|---|
-| R-G06 | Jardín de agua | Un jardín en la orilla, con estanque, nenúfares y embarcadero |
-| R-G05 | Jardín de la plaza | Un jardín junto a la plaza, con fuente y setos recortados |
-| R-G04 | Arboreto | Un jardín de cinco clics, con árboles de todo el mundo |
-| R-G03 | Laberinto | Un jardín de cuatro clics: setos en laberinto |
-| R-G02 | Invernadero | Un jardín de tres clics, con cristaleras |
-| R-G01 | Parque | Un jardín de dos clics: árboles, bancos y un estanque |
-| R-W04 | Alcázar | Una muralla de cinco clics: el alcázar del pueblo |
-| R-W03 | Fortaleza | Una muralla de cuatro clics, con dos torres y puerta |
-| R-W02 | Torreón | Una muralla de tres clics, con torre redonda |
-| R-W05 | Puerta de la muralla | Una muralla de dos o tres clics junto a una torre |
-| R-W01 | Muralla | Una tapia de dos clics, con adarve y almenas |
-| R-M04 | Ciudadela | Un castillo con una torre de cuatro pisos o más |
-| R-M03 | Castillo | Tres torres juntas. Si las subes, crece |
-| R-L01 | Faro | Una torre en la orilla. Más alta, si la subes |
-| R-T04 | Observatorio | Una torre junto a la plaza |
-| R-T05 | Palomar | Una torre entre dos árboles |
-| R-T03 | Torre del reloj | Una torre con dos calles y una casa cerca |
-| R-T09 | Torre maestra | Una torre de cinco pisos |
-| R-T08 | Aguja | Una torre de cuatro pisos junto a las casas |
-| R-T07 | Atalaya | Una torre de tres pisos |
-| R-T02 | Campanario | Una torre con un piso más |
-| R-C02 | Catedral | Una casa de dos o tres pisos junto a una torre |
-| R-H01 | Capilla | Una casa pegada a una torre |
-| R-C01 | Ayuntamiento | Una casa alta junto a la plaza, con una calle |
-| R-H06 | Posada | Una casa en el rincón de la plaza, con dos calles |
-| R-H22 | Biblioteca | Una casa alta junto a la plaza, con casas alrededor |
-| R-H21 | Escuela | Una casa junto a la plaza, con dos casas alrededor |
-| R-C03 | Palacio | Una casa de cinco pisos, con su cimborrio |
-| R-H23 | Casa de vecindad | Una casa de cuatro pisos |
-| R-H09 | Casona | Una casa de tres pisos (tres clics en la casilla) |
-| R-H10 | Casa alta | Una casa con un piso más (dos clics en la casilla) |
-| R-H16 | Molino de agua | Un molino junto al agua |
-| R-H17 | Almacén | Una casa entre dos embarcaderos |
-| R-H05 | Casa de botes | Una casa junto a un embarcadero |
-| R-H19 | Herrería | Una casa junto a un campo y un camino |
-| R-H07 | Tienda | Una casa abierta a dos calles |
-| R-S01 | Puesto de mercado | Una casa entre la plaza y el camino |
-| R-H24 | Cuadra | Una casa entre dos campos, con caballos |
-| R-H18 | Granero | Una casa junto a un campo |
-| R-H15 | Casa de campo | Una casa entre dos o más árboles |
-| R-B01 | Puente | Un camino puesto sobre el agua |
-| R-D01 | Muelle de piedra | Un camino que toca el agua |
-| R-M11 | Teatro | Una plaza junto a una torre |
-| R-M12 | Templete | Una plaza entre tres árboles o más |
-| R-F01 | Plaza con fuente | Cuatro plazas juntas |
-| R-P02 | Roble | El gran roble: sigue creciendo en el cuarto y el quinto clic |
-| R-P01 | Huerto | Cuatro árboles juntos |
-| R-F02 | Viñedo | Un campo junto a un jardín, con sus parras |
+| R-G07 | Mirador | Un jardín en lo alto (dos escalones o más): balaustrada y vistas. |
+| R-G08 | Rocalla | Un jardín en alto (un escalón): peñas y plantas de montaña. |
+| R-G06 | Jardín de agua | Un jardín en la orilla, con estanque, nenúfares y embarcadero. |
+| R-G05 | Jardín de la plaza | Un jardín junto a la plaza, con fuente y setos recortados. |
+| R-G04 | Arboreto | Un jardín de cinco clics, con árboles de todo el mundo. |
+| R-G03 | Laberinto | Un jardín de cuatro clics: setos en laberinto. |
+| R-G02 | Invernadero | Un jardín de tres clics, con cristaleras. |
+| R-G10 | Jardín botánico | Un jardín de dos pisos junto a otro jardín: parterres con cartel. |
+| R-G09 | Rosaleda | Un jardín de un piso con calle y dos casas al lado: rosas y arcos. |
+| R-G01 | Parque | Un jardín de dos clics: árboles, bancos y un estanque. |
+| R-W04 | Alcázar | Una muralla de cinco clics: el alcázar del pueblo. |
+| R-W03 | Fortaleza | Una muralla de cuatro clics, con dos torres y puerta. |
+| R-W08 | Acueducto | Una muralla de tres clics con un camino al lado: arcos de agua. |
+| R-W07 | Batería de costa | Una muralla de dos pisos o menos en la orilla: cañones al agua. |
+| R-W06 | Cerca del huerto | Una muralla de un piso junto a un jardín: espalderas. |
+| R-W02 | Torreón | Una muralla de tres clics, con torre redonda. |
+| R-W05 | Puerta de la muralla | Una muralla de dos o tres clics junto a una torre. |
+| R-W01 | Muralla | Una tapia de dos clics, con adarve y almenas. |
+| R-M04 | Ciudadela | Un castillo con una torre de cuatro pisos o más. |
+| R-M03 | Castillo | Tres torres juntas. Si las subes, crece. |
+| R-T11 | Torre de señales | Una torre baja junto a un embarcadero: mástil de señales. |
+| R-L01 | Faro | Una torre en la orilla. Más alta, si la subes. |
+| R-T15 | Torre del concejo | Una torre de dos pisos con tres plazas alrededor: balcón y pendón. |
+| R-T14 | Ermita | Una torre de un piso entre tres árboles o más. |
+| R-T13 | Torre albarrana | Una torre de tres pisos o menos pegada a una muralla. |
+| R-T12 | Hórreo | Una torre de un piso junto a un campo: granero sobre cuatro pies. |
+| R-T10 | Torres gemelas | Una torre de dos pisos o menos con otra torre al lado. |
+| R-T06 | Torre vigía | Una torre de tres pisos o menos en lo alto (dos escalones de terreno). |
+| R-T04 | Observatorio | Una torre junto a la plaza. |
+| R-T05 | Palomar | Una torre entre dos árboles. |
+| R-T03 | Torre del reloj | Una torre con dos calles y una casa cerca. |
+| R-T09 | Torre maestra | Una torre de cinco pisos. |
+| R-T08 | Aguja | Una torre de cuatro pisos junto a las casas. |
+| R-T07 | Atalaya | Una torre de tres pisos. |
+| R-T02 | Campanario | Una torre con un piso más. |
+| R-H25 | Casa torre | Una casa baja entre dos torres, con escalera de caracol. |
+| R-H51 | Hospital | Una casa de un piso entre cuatro casas o más: hospital con su cruz. |
+| R-H40 | Panadería | Una casa de un piso en una esquina con tres casas alrededor: horno y panes. |
+| R-H41 | Botica | Una casa de un piso rodeada de casas y sin calle: botica con su letrero. |
+| R-H42 | Casa de baños | Una casa de dos pisos en la orilla: cúpula, vapor y su piscina. |
+| R-H43 | Alfarería | Una casa de un piso en la orilla, junto a un embarcadero: horno y cacharros. |
+| R-H44 | Telar | Una casa de dos pisos entre cuatro casas o más: telares y paños al sol. |
+| R-H45 | Quesería | Una casa de un piso con dos casas al lado y un árbol: lecheras y quesos. |
+| R-H46 | Bodega | Una casa de un piso en alto, con una casa al lado: cubas y parra. |
+| R-H47 | Nevera | Una casa de un piso a la sombra de un edificio alto, con un árbol: pozo de hielo. |
+| R-H48 | Pabellón de caza | Una casa de un piso sola, con un árbol al lado: pabellón de caza. |
+| R-H49 | Monasterio | Una casa de dos pisos junto a una torre en diagonal: claustro y campanilla. |
+| R-H50 | Imprenta | Una casa de dos pisos en llano, con calle y tres casas alrededor: prensa de tornillo. |
+| R-H52 | Lonja de gremios | Una casa de tres pisos entre tres casas, sin plaza: lonja de gremios. |
+| R-C02 | Catedral | Una casa de dos o tres pisos junto a una torre. |
+| R-H01 | Capilla | Una casa pegada a una torre. |
+| R-C01 | Ayuntamiento | Una casa alta junto a la plaza, con una calle. |
+| R-H06 | Posada | Una casa en el rincón de la plaza, con dos calles. |
+| R-H22 | Biblioteca | Una casa alta junto a la plaza, con casas alrededor. |
+| R-H21 | Escuela | Una casa junto a la plaza, con dos casas alrededor. |
+| R-H26 | Casa de pescadores | Una casa baja en la orilla, lejos del embarcadero. |
+| R-H27 | Casa del molinero | Una casa baja junto a un molino, con sacos y polea. |
+| R-H28 | Casa solariega | Una casa baja junto a un jardín, con verja y parra. |
+| R-H53 | Cuartel | Una casa de dos pisos pegada a dos murallas: cuartel con bandera. |
+| R-H54 | Audiencia | Una casa de tres pisos junto a una muralla: columnas y frontón. |
+| R-C03 | Palacio | Una casa de cinco pisos, con su cimborrio. |
+| R-H23 | Casa de vecindad | Una casa de cuatro pisos. |
+| R-H09 | Casona | Una casa de tres pisos (tres clics en la casilla). |
+| R-H10 | Casa alta | Una casa con un piso más (dos clics en la casilla). |
+| R-H30 | Molino de marea | Un molino en la orilla, junto a un embarcadero: rueda en el agua. |
+| R-H31 | Aserradero | Un molino entre dos árboles o más: sierra y troncos. |
+| R-H32 | Molino de monte | Un molino en alto (un escalón de terreno), con su cola y sus aspas. |
+| R-H33 | Muelle de carga | Un embarcadero de dos clics: grúa y cajas. |
+| R-H16 | Molino de agua | Un molino junto al agua. |
+| R-H17 | Almacén | Una casa entre dos embarcaderos. |
+| R-H05 | Casa de botes | Una casa junto a un embarcadero. |
+| R-H19 | Herrería | Una casa junto a un campo y un camino. |
+| R-H07 | Tienda | Una casa abierta a dos calles. |
+| R-S01 | Puesto de mercado | Una casa entre la plaza y el camino. |
+| R-H24 | Cuadra | Una casa entre dos campos, con caballos. |
+| R-H18 | Granero | Una casa junto a un campo. |
+| R-H15 | Casa de campo | Una casa entre dos o más árboles. |
+| R-B01 | Puente | Un camino puesto sobre el agua. |
+| R-D02 | Camino de ronda | Un camino junto a una muralla. |
+| R-D03 | Paseo arbolado | Un camino entre dos árboles o más: hilera, bancos y farolas. |
+| R-D01 | Muelle de piedra | Un camino que toca el agua. |
+| R-M11 | Teatro | Una plaza junto a una torre. |
+| R-M12 | Templete | Una plaza entre tres árboles o más. |
+| R-F01 | Plaza con fuente | Cuatro plazas juntas. |
+| R-F03 | Plaza porticada | Una plaza con dos calles: soportales en dos lados. |
+| R-F04 | Mercadillo | Una plaza con tres casas alrededor: puestos de toldo. |
+| R-P06 | Sauce llorón | Un árbol en la orilla del agua. |
+| R-P05 | Seto | Un árbol entre tres casas o más: seto recortado. |
+| R-P04 | Olivo | Un árbol junto a un campo. |
+| R-P03 | Pino de cumbre | Un árbol en lo alto (dos escalones de terreno). |
+| R-P02 | Roble | El gran roble: sigue creciendo en el cuarto y el quinto clic. |
+| R-P01 | Huerto | Cuatro árboles juntos. |
+| R-F02 | Viñedo | Un campo junto a un jardín, con sus parras. |
+| R-F06 | Arrozal | Un campo en la orilla: eras inundadas. |
+| R-F05 | Prado | Un campo entre dos árboles o más: hierba, flores y un pajar. |
+| R-F07 | Olivar | Un campo subido dos clics: olivos en hilera. |
+| R-F08 | Trigal | Un campo junto a otro campo: espigas y gavillas. |
+| R-F09 | Salinas | Un embarcadero junto a un campo: eras de sal. |
+| R-F10 | Lonja de pescado | Un embarcadero junto a una plaza: pescado y cajas. |
+| R-F11 | Astillero | Un embarcadero junto a un árbol y una casa: cuaderna a medio hacer. |
 
 Los bloques base (casa, torre, molino, calle, plaza, árbol, embarcadero, campo, jardín y tapia) no
 cuentan como hallazgo, pero sí cambian de altura. Un jardín al lado de una casa hace que la casa gane
@@ -252,10 +312,10 @@ Cuatro cosas que no estaban en la referencia y que hacen que el pueblo sea tuyo.
 | Archivo | Qué hace |
 |---|---|
 | `src/grid.ts` | rejilla, isla procedural (semilla, con ríos y lagos), bloques con nivel, guardado en `localStorage` |
-| `src/rules.ts` | hechos de cada casilla (vecinos, agua, nivel, altura de alrededor y del suelo) y 53 reglas ordenadas |
+| `src/rules.ts` | hechos de cada casilla (vecinos, agua, nivel, altura de alrededor y del suelo) y 100 reglas ordenadas en el orden en que deciden |
 | `src/grow.ts` | el generador de "crecer un pueblo": plaza, calles, callejón, castillo, granja, puerto |
 | `src/geo.ts` | acumula primitivas en una geometría con color por vértice y recoge las luces |
-| `src/buildings.ts` | los 63 roles en 3D: palacios, castillos, invernaderos, viñedos, cuadras, muelles, árboles que crecen |
+| `src/buildings.ts` | los 147 roles en 3D: palacios, castillos, hórreos, acueductos, salinas, aserraderos, sauces, árboles que crecen |
 | `src/materials.ts` | tres tonos planos (sin rayado), agua con oleaje suave, humo y luces; `uDusk` mueve todo al atardecer |
 | `src/life.ts` | gente articulada, gatos, perros, palomas, globo aerostático, barcos con estela, gaviotas, humo, tiempo |
 | `src/season.ts` | las cuatro estaciones: tonos de hoja, césped y cosecha, y qué cae del cielo |
@@ -263,6 +323,7 @@ Cuatro cosas que no estaban en la referencia y que hacen que el pueblo sea tuyo.
 | `src/placeui.ts` | la ventana de "Lugar real": dirección, tamaño, ubicación y resultados |
 | `src/share.ts` | el pueblo en un enlace (`#p=semilla.xzkN…`), con altura y giro de cada bloque; lo valida al cargar |
 | `src/scene.ts` | cámara, isla con su bioma, sus colinas y su agua, sombras, reconstrucción, ciclo de luz y postal |
+| `src/census.ts` | el censo: cuánta gente cabe en cada oficio, por planta, y cuánta sale a la calle |
 | `src/guide.ts` | la guía de hallazgos |
 | `src/intro.ts` | la tarjeta de bienvenida, que se muestra una sola vez |
 | `src/saves.ts` | tres pueblos guardados en `localStorage`, con su fecha y sus hallazgos |
