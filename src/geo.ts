@@ -63,6 +63,16 @@ export class GeoBuilder {
   private normals: number[] = [];
   private colors: number[] = [];
   private vertices = 0;
+  /**
+   * Flat colour laid on the ground — the worn patches of a lane, the clouds of
+   * grass — goes in its own buffer. The ink pass outlines everything it is
+   * given, and a three per cent tint with an outline turns a floor into a
+   * puzzle of plates.
+   */
+  private decalPositions: number[] = [];
+  private decalNormals: number[] = [];
+  private decalColors: number[] = [];
+  private decalVertices = 0;
 
   /** Registers a light in the builder's local space. */
   light(x: number, y: number, z: number, size = 1): this {
@@ -102,6 +112,51 @@ export class GeoBuilder {
     }
     this.vertices += source.length / 3;
     return this;
+  }
+
+  /** Like `add`, but flat on the ground and outside the ink pass. */
+  addDecal(
+    geometry: THREE.BufferGeometry,
+    color: number,
+    at: Vec3 = [0, 0, 0],
+    rot: Vec3 = [0, 0, 0],
+    size: Vec3 = [1, 1, 1],
+  ): this {
+    const shape = template(geometry);
+    euler.set(rot[0], rot[1], rot[2]);
+    quaternion.setFromEuler(euler);
+    matrix.compose(at3.set(at[0], at[1], at[2]), quaternion, size3.set(size[0], size[1], size[2]));
+    normalMatrix.getNormalMatrix(matrix);
+    tint.setHex(color);
+    const r = tint.r;
+    const g = tint.g;
+    const b = tint.b;
+    const source = shape.position;
+    const sourceNormals = shape.normal;
+    for (let i = 0; i < source.length; i += 3) {
+      vertex.set(source[i], source[i + 1], source[i + 2]).applyMatrix4(matrix);
+      this.decalPositions.push(vertex.x, vertex.y, vertex.z);
+      normal.set(sourceNormals[i], sourceNormals[i + 1], sourceNormals[i + 2]).applyMatrix3(normalMatrix).normalize();
+      this.decalNormals.push(normal.x, normal.y, normal.z);
+      this.decalColors.push(r, g, b);
+    }
+    this.decalVertices += source.length / 3;
+    return this;
+  }
+
+  /** The decals on their own, or null when nothing was laid on the ground. */
+  buildDecals(): THREE.BufferGeometry | null {
+    if (this.decalVertices === 0) return null;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.decalPositions, 3));
+    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(this.decalNormals, 3));
+    geometry.setAttribute('aColor', new THREE.Float32BufferAttribute(this.decalColors, 3));
+    geometry.computeBoundingSphere();
+    this.decalPositions = [];
+    this.decalNormals = [];
+    this.decalColors = [];
+    this.decalVertices = 0;
+    return geometry;
   }
 
   build(): THREE.BufferGeometry | null {

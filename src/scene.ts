@@ -158,7 +158,14 @@ export class World {
    */
   private readonly cellCache = new Map<
     string,
-    { sig: string; geometry: THREE.BufferGeometry; shadow: THREE.BufferGeometry | null; lights: Light[] }
+    {
+      sig: string;
+      geometry: THREE.BufferGeometry;
+      /** Flat colour on the floor: drawn without the ink pass. */
+      decals: THREE.BufferGeometry | null;
+      shadow: THREE.BufferGeometry | null;
+      lights: Light[];
+    }
   >();
   private readonly ghostBox = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.62), this.ghostMat);
   private readonly ghostPad = new THREE.Mesh(new THREE.PlaneGeometry(0.94, 0.94), this.ghostMat);
@@ -279,6 +286,8 @@ export class World {
 
     this.biome = BIOMES[Math.floor(rng((seed ^ 0x51ed270b) >>> 0)() * BIOMES.length) % BIOMES.length];
     const gb = new GeoBuilder();
+    // The clouds of grass go in their own mesh: no ink, no plates.
+    const decals = new GeoBuilder();
     const random = rng(seed ^ 0x9e3779b9);
     const drift = driftField(seed ^ 0x2545f491, 4.5);
     this.grass = drift;
@@ -322,7 +331,7 @@ export class World {
             const px = wx + (random() - 0.5) * TILE * 0.3;
             const pz = wz + (random() - 0.5) * TILE * 0.3;
             const tone = mixHex(grass, random() < 0.5 ? 0xffffff : 0x2c2a1f, 0.03 + random() * 0.045);
-            gb.add(patch(Math.floor(random() * 6)), tone, [px, 0.0012 + p * 0.0007, pz], [0, random() * 6.283, 0], [size, 1, size]);
+            decals.addDecal(patch(Math.floor(random() * 6)), tone, [px, 0.0012 + p * 0.0007, pz], [0, random() * 6.283, 0], [size, 1, size]);
           }
         }
 
@@ -408,6 +417,13 @@ export class World {
     ink.frustumCulled = false;
     this.terrain.add(ink);
     const owned = new Set([geometry]);
+    const ground = decals.buildDecals();
+    if (ground) {
+      const layer = new THREE.Mesh(ground, this.surface);
+      layer.frustumCulled = false;
+      this.terrain.add(layer);
+      owned.add(ground);
+    }
     const river = channels.build();
     if (river) {
       const sheet = new THREE.Mesh(river, this.water);
@@ -576,6 +592,7 @@ export class World {
     this.clearGroup(this.townGroup);
     const parts: THREE.BufferGeometry[] = [];
     const mounds: THREE.BufferGeometry[] = [];
+    const decalParts: THREE.BufferGeometry[] = [];
     const shadows: THREE.BufferGeometry[] = [];
     const lights: Light[] = [];
     const matrix = new THREE.Matrix4();
@@ -616,6 +633,7 @@ export class World {
       let cached = this.cellCache.get(key);
       if (cached && cached.sig !== sig) {
         cached.geometry.dispose();
+        cached.decals?.dispose();
         cached.shadow?.dispose();
         this.cellCache.delete(key);
         cached = undefined;
@@ -625,11 +643,15 @@ export class World {
         const gb = new GeoBuilder();
         buildRole(cell.role, cell.storeys, gb, random, cell.links);
         const raw = gb.build();
+        const rawDecals = gb.buildDecals();
+        // One merged town: the cell geometry is baked into world space. The
+        // decals are placed before the test on `raw`, so a role that paints the
+        // floor and builds nothing above it still lands where it belongs.
+        matrix.makeRotationY(align);
+        matrix.setPosition(wx, baseY, wz);
+        raw?.applyMatrix4(matrix);
+        rawDecals?.applyMatrix4(matrix);
         if (raw) {
-          // One merged town: the cell geometry is baked into world space.
-          matrix.makeRotationY(align);
-          matrix.setPosition(wx, baseY, wz);
-          raw.applyMatrix4(matrix);
           let shadow: THREE.BufferGeometry | null = null;
           if (!onWater) {
             shadow = this.shadowGeometry.clone();
@@ -648,7 +670,7 @@ export class World {
             z: wz - light.x * sin + light.z * cos,
             size: light.size,
           }));
-          cached = { sig, geometry: raw, shadow, lights: cellLights };
+          cached = { sig, geometry: raw, decals: rawDecals, shadow, lights: cellLights };
           this.cellCache.set(key, cached);
         }
         this.timings.build += performance.now() - buildStarted;
@@ -656,6 +678,7 @@ export class World {
       }
 
       parts.push(cached.geometry);
+      if (cached.decals) decalParts.push(cached.decals);
       if (cached.shadow) shadows.push(cached.shadow);
       for (const light of cached.lights) lights.push(light);
     }
@@ -736,7 +759,7 @@ export class World {
           const raw = gb.build();
           if (!raw) continue;
           raw.applyMatrix4(new THREE.Matrix4().setPosition(worldX(x) * TILE, 0, worldZ(z) * TILE));
-          entry = { sig, geometry: raw, shadow: null, lights: [] };
+          entry = { sig, geometry: raw, decals: null, shadow: null, lights: [] };
           this.cellCache.set(moundKey, entry);
         }
         mounds.push(entry.geometry);
@@ -747,6 +770,7 @@ export class World {
     for (const [key, entry] of this.cellCache) {
       if (alive.has(key)) continue;
       entry.geometry.dispose();
+      entry.decals?.dispose();
       entry.shadow?.dispose();
       this.cellCache.delete(key);
     }
@@ -755,6 +779,15 @@ export class World {
     const mergeStarted = performance.now();
     // The hill terraces go in without the ink pass: an inverted hull around a
     // panel three centimetres thick paints a black band along every step.
+    // The worn patches of a lane go in their own mesh, with no ink around them.
+    const patches = decalParts.length ? mergeGeometries(decalParts, false) : null;
+    if (patches) {
+      patches.computeBoundingSphere();
+      const layer = new THREE.Mesh(patches, this.surface);
+      layer.frustumCulled = false;
+      this.townGroup.add(layer);
+      owned.add(patches);
+    }
     const relief = mounds.length ? mergeGeometries(mounds, false) : null;
     if (relief) {
       relief.computeBoundingSphere();
@@ -917,6 +950,7 @@ export class World {
   private clearCellCache(): void {
     for (const entry of this.cellCache.values()) {
       entry.geometry.dispose();
+      entry.decals?.dispose();
       entry.shadow?.dispose();
     }
     this.cellCache.clear();

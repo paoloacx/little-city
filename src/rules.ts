@@ -337,11 +337,13 @@ export function resolveTown(
       if (wall(1, 0)) links |= LINK_E;
       if (wall(0, 1)) links |= LINK_S;
       if (wall(-1, 0)) links |= LINK_W;
-    } else if (placed.kind === 'path') {
-      // A lane knows which way it runs, so it can be drawn as one road: no kerbs
-      // across the way it carries on, and wheel ruts along it.
-      const road = (dx: number, dz: number): boolean =>
-        town.blocks.get(key(x + dx, z + dz))?.kind === 'path';
+    } else if (placed.kind === 'path' || placed.kind === 'plaza') {
+      // A lane or a square knows which way it runs, so it can be drawn as one
+      // floor: no kerbs across the way it carries on, and ruts along a lane.
+      const road = (dx: number, dz: number): boolean => {
+        const kind = town.blocks.get(key(x + dx, z + dz))?.kind;
+        return kind === 'path' || kind === 'plaza';
+      };
       if (road(0, -1)) links |= LINK_N;
       if (road(1, 0)) links |= LINK_E;
       if (road(0, 1)) links |= LINK_S;

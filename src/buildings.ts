@@ -158,14 +158,55 @@ function lamp(gb: GeoBuilder, x: number, z: number) {
   gb.light(x, 0.46, z, 1.1);
 }
 
+/**
+ * A park bench, at the scale of the figures: seat at 7,5 cm, back at 20 cm.
+ * Chunky on purpose. At this size a slat is a couple of pixels, and every slat
+ * gets its own outline, so a finely joinered bench reads as a pile of planks:
+ * two legs, a seat, a solid back and a lit cap rail carry the shape.
+ */
 function bench(gb: GeoBuilder, x: number, z: number, rotY: number) {
-  // A bench with legs and a back: two loose slabs read as planks on the ground.
+  const cos = Math.cos(rotY);
+  const sin = Math.sin(rotY);
+  const put = (tone: number, lx: number, ly: number, lz: number, w: number, h: number, d: number): void => {
+    gb.add(cube(), tone, [x + lx * cos + lz * sin, ly, z - lx * sin + lz * cos], [0, rotY, 0], [w, h, d]);
+  };
+  const L = 0.4;
+  const D = 0.13;
+  const seatY = 0.078;
+  const backY = 0.182;
+  const backZ = -D * 0.34;
   for (const side of [-1, 1]) {
-    gb.add(cube(), C.woodDark, [x + side * 0.1, 0.045, z], [0, rotY, 0], [0.025, 0.09, 0.07]);
-    gb.add(cube(), C.woodDark, [x + side * 0.1, 0.14, z - 0.035], [0, rotY, 0], [0.02, 0.13, 0.02]);
+    put(C.iron, side * L * 0.36, seatY / 2, 0.002, 0.03, seatY, D * 0.68);
+    // The iron end rises past the seat and takes the back, as on a real bench.
+    put(C.iron, side * L * 0.36, (seatY + backY) / 2 + 0.004, backZ, 0.024, backY - seatY, 0.036);
   }
-  gb.add(cube(), C.wood, [x, 0.095, z], [0, rotY, 0], [0.3, 0.024, 0.075]);
-  gb.add(cube(), C.wood, [x, 0.155, z - 0.038], [0, rotY, 0], [0.3, 0.05, 0.018]);
+  put(mixHex(C.wood, 0xf3e7cd, 0.2), 0, seatY + 0.011, 0.006, L, 0.022, D);
+  // The back starts clear of the seat: the slot between them is what stops a
+  // bench reading as a ramp.
+  put(C.wood, 0, seatY + 0.062, backZ, L, 0.072, 0.03);
+  // The cap sits flush with the back: a rail that overhangs makes three parallel
+  // boards from behind, which reads as a stack of planks.
+  put(mixHex(C.wood, 0xf3e7cd, 0.34), 0, backY, backZ - 0.001, L + 0.004, 0.014, 0.032);
+}
+
+/**
+ * A stone fountain: a shallow basin with a moulded rim, the water inside, a
+ * tapered stem and a small upper bowl with a jet. Height matters — a drum as
+ * tall as the figures reads as a bucket, so the basin stays low and wide.
+ */
+function fountain(gb: GeoBuilder, s = 1) {
+  const u = (v: number): number => v * s;
+  gb.add(plate(), C.stoneDark, [0, u(0.035), 0], [0, 0, 0], [u(0.54), u(0.03), u(0.54)]);
+  gb.add(plate(), C.stone, [0, u(0.062), 0], [0, 0, 0], [u(0.48), u(0.045), u(0.48)]);
+  gb.add(plate(), C.stoneLight, [0, u(0.088), 0], [0, 0, 0], [u(0.52), u(0.016), u(0.52)]);
+  gb.add(plate(), C.water, [0, u(0.084), 0], [0, 0, 0], [u(0.4), u(0.012), u(0.4)]);
+  gb.add(taper(), C.stoneLight, [0, u(0.09), 0], [0, 0, 0], [u(0.1), u(0.1), u(0.1)]);
+  gb.add(plate(), C.stone, [0, u(0.196), 0], [0, 0, 0], [u(0.22), u(0.026), u(0.22)]);
+  gb.add(plate(), C.water, [0, u(0.209), 0], [0, 0, 0], [u(0.17), u(0.008), u(0.17)]);
+  gb.add(taper(), C.stoneLight, [0, u(0.21), 0], [0, 0, 0], [u(0.05), u(0.05), u(0.05)]);
+  gb.add(plate(), C.stoneLight, [0, u(0.262), 0], [0, 0, 0], [u(0.075), u(0.014), u(0.075)]);
+  gb.add(cone(), C.water, [0, u(0.268), 0], [0, 0, 0], [u(0.05), u(0.06), u(0.05)]);
+  gb.light(0, u(0.11), 0, 0.6);
 }
 
 function tree(gb: GeoBuilder, x: number, z: number, s: number, rnd: () => number) {
@@ -177,8 +218,10 @@ function tree(gb: GeoBuilder, x: number, z: number, s: number, rnd: () => number
   const trunkTop = H * 0.58;
   const crown = 0.11 + s * 0.07;
   const centre = H * 0.76;
-  gb.add(cone(), C.trunk, [x, 0, z], [0, 0, 0], [foot * 1.7, foot * 1.2, foot * 1.7]);
-  gb.add(taper(), C.trunk, [x, foot, z], [0, 0, 0], [foot, trunkTop, foot]);
+  // The flare is a skirt of bark, barely wider than the trunk: at this size a
+  // wide cone under every tree reads as a flowerpot.
+  gb.add(cone(), C.trunk, [x, 0, z], [0, 0, 0], [foot * 1.22, foot * 0.7, foot * 1.22]);
+  gb.add(taper(), C.trunk, [x, foot * 0.45, z], [0, 0, 0], [foot, trunkTop, foot]);
   if (getSeason().bare) {
     // Winter: the limbs are the tree, and the snow that sits on them is what the
     // eye reads from this distance.
@@ -255,8 +298,8 @@ function grownTree(gb: GeoBuilder, x: number, z: number, level: number, rnd: () 
   const centre = H * (kind === 'pine' || kind === 'cypress' ? 0.6 : 0.78);
   const bare = getSeason().bare;
   // Root flare and the trunk, in two tapered pieces so it thins as it rises.
-  gb.add(cone(), C.trunk, [x, 0, z], [0, 0, 0], [foot * 1.7, foot * 1.1, foot * 1.7]);
-  gb.add(taper(), C.trunk, [x, foot * 0.5, z], [0, 0, 0], [foot, trunkTop, foot]);
+  gb.add(cone(), C.trunk, [x, 0, z], [0, 0, 0], [foot * 1.24, foot * 0.66, foot * 1.24]);
+  gb.add(taper(), C.trunk, [x, foot * 0.42, z], [0, 0, 0], [foot, trunkTop, foot]);
   if (kind === 'pine' || kind === 'cypress') {
     const needle = bare ? mixHex(C.leafDeep, C.snow, 0.45) : C.leafDeep;
     if (kind === 'cypress') {
@@ -1044,7 +1087,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
       const px = (rnd() - 0.5) * 0.6;
       const pz = (rnd() - 0.5) * 0.6;
       const size = 0.42 + rnd() * 0.3;
-      gb.add(patch(Math.floor(rnd() * 6)), rnd() < 0.6 ? light : dark, [px, 0.014, pz], [0, rnd() * 6.283, 0], [size, 1, size]);
+      gb.addDecal(patch(Math.floor(rnd() * 6)), rnd() < 0.6 ? light : dark, [px, 0.014, pz], [0, rnd() * 6.283, 0], [size, 1, size]);
     }
     // Two ruts down the middle of the way it runs: the town's carts go that way.
     const rut = mixHex(C.path, C.soil, 0.4);
@@ -1058,9 +1101,9 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
         gb.add(cube(), rut, [0, 0.016, sz], [0, 0, 0], [1, 0.006, 0.1]);
       }
     }
-    // Kerbs only where the lane ends: a road that carries on has no step in it.
-    const kerb = mixHex(C.stone, C.stoneLight, 0.5);
-    const edge = mixHex(C.stoneDark, C.path, 0.35);
+    // A lane is earth, not a plinth: where it ends, its own edge wears into the
+    // grass as a shoulder. A kerb here would make every tile a little platform.
+    const shoulder = mixHex(C.path, C.soil, 0.3);
     for (const [dx, dz, bit] of [
       [0, -1, LINK_N],
       [1, 0, LINK_E],
@@ -1069,28 +1112,22 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
     ] as Array<[number, number, number]>) {
       if (links & bit) continue;
       const across = dx !== 0;
-      gb.add(
-        cube(),
-        edge,
-        [dx * 0.47, 0.014, dz * 0.47],
+      gb.addDecal(
+        quad(),
+        shoulder,
+        [dx * 0.478, 0.0125, dz * 0.478],
         [0, 0, 0],
-        [across ? 0.06 : 0.99, 0.02, across ? 0.99 : 0.06],
-      );
-      gb.add(
-        cube(),
-        kerb,
-        [dx * 0.45, 0.03, dz * 0.45],
-        [0, 0, 0],
-        [across ? 0.08 : 0.97, 0.024, across ? 0.97 : 0.08],
+        [across ? 0.044 : 1, 1, across ? 1 : 0.044],
       );
     }
+    // Two trodden stones, flat in the earth and not pebbles on a tray.
     for (let i = 0; i < 2; i++) {
-      gb.add(blob(), mixHex(C.stone, C.path, 0.6), [(rnd() - 0.5) * 0.8, 0.02, (rnd() - 0.5) * 0.8], [0, rnd() * 3, 0], [0.07, 0.03, 0.07]);
+      gb.addDecal(blob(), mixHex(C.stone, C.path, 0.55), [(rnd() - 0.5) * 0.8, 0.013, (rnd() - 0.5) * 0.8], [0, rnd() * 3, 0], [0.06, 0.01, 0.05]);
     }
     // A street in a row of them needs fewer lamps, or the town is all posts.
     if (rnd() < 0.42) lamp(gb, 0.4, 0.4);
     if (rnd() < 0.15) lamp(gb, -0.4, -0.4);
-    if (rnd() < 0.3) bench(gb, -0.36, 0.42, 0.2);
+    if (rnd() < 0.3) bench(gb, -0.29, 0.33, 0.2);
   },
 
   quay: (gb, rnd) => {
@@ -1144,39 +1181,70 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
     if (rnd() < 0.4) lamp(gb, 0.42, 0.3);
   },
 
-  plaza: (gb, rnd) => {
-    // Paving is a bed of mortar with stones laid on it: irregular polygons that
-    // overlap a little, so the joints wander instead of ruling a grid.
-    gb.add(cube(), mixHex(C.stoneDark, C.ink, 0.22), [0, 0.014, 0], [0, 0, 0], [0.99, 0.028, 0.99]);
-    const tones = [C.stone, C.stoneLight, mixHex(C.stone, C.stoneLight, 0.55), mixHex(C.stone, C.stoneDark, 0.3)];
-    const n = 4;
-    const step = 0.98 / n;
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        const px = -0.49 + step * (i + 0.5) + (rnd() - 0.5) * step * 0.1;
-        const pz = -0.49 + step * (j + 0.5) + (rnd() - 0.5) * step * 0.1;
-        const turn = rnd() * 6.283;
-        const size = step * (1.34 + rnd() * 0.16);
+  plaza: (gb, rnd, _level, links) => {
+    // Flagstones, laid in courses of different widths on a bed of mortar. A
+    // square is a floor, not a heap of stones: the joints run, the slabs are
+    // flat, and only the courses wander.
+    gb.add(cube(), mixHex(C.stoneDark, C.ink, 0.3), [0, 0.006, 0], [0, 0, 0], [1, 0.012, 1]);
+    const tones = [
+      C.stone,
+      C.stoneLight,
+      mixHex(C.stone, C.stoneLight, 0.55),
+      mixHex(C.stone, C.stoneDark, 0.22),
+      mixHex(C.stoneLight, 0xffffff, 0.12),
+    ];
+    const courses = 4;
+    const courseH = 1 / courses;
+    const joint = 0.012;
+    for (let j = 0; j < courses; j++) {
+      const pz = -0.5 + courseH * (j + 0.5);
+      let x0 = -0.5;
+      let guard = 0;
+      while (x0 < 0.5 - 0.05 && guard++ < 12) {
+        const widths = [0.17, 0.21, 0.25, 0.3];
+        let w = widths[Math.floor(rnd() * widths.length)];
+        // The last slab of a course takes what is left, so no course overruns.
+        if (0.5 - (x0 + w) < 0.1) w = 0.5 - x0;
         const tone = tones[Math.floor(rnd() * tones.length)];
-        gb.add(patch(Math.floor(rnd() * 6)), tone, [px, 0.03 + rnd() * 0.0016, pz], [0, turn, 0], [size, 1, size]);
+        gb.add(
+          cube(),
+          tone,
+          [x0 + w / 2, 0.018, pz],
+          [0, (rnd() - 0.5) * 0.014, 0],
+          [w - joint, 0.012, courseH - joint],
+        );
+        x0 += w;
       }
     }
-    // Worn kerb stones and a drain, so the paving meets the grass.
-    for (let i = 0; i < 3; i++) {
-      const along = -0.34 + i * 0.34;
-      gb.add(cube(), mixHex(C.stone, C.stoneDark, 0.5), [along, 0.02, 0.47], [0, (rnd() - 0.5) * 0.05, 0], [0.3, 0.03, 0.06]);
+    // Kerb only where the square ends: a floor that carries on has no step.
+    const kerb = mixHex(C.stone, C.stoneLight, 0.35);
+    const edge = mixHex(C.stoneDark, C.path, 0.3);
+    for (const [dx, dz, bit] of [
+      [0, -1, LINK_N],
+      [1, 0, LINK_E],
+      [0, 1, LINK_S],
+      [-1, 0, LINK_W],
+    ] as Array<[number, number, number]>) {
+      if (links & bit) continue;
+      const across = dx !== 0;
+      gb.add(cube(), edge, [dx * 0.482, 0.014, dz * 0.482], [0, 0, 0], [across ? 0.036 : 0.99, 0.02, across ? 0.99 : 0.036]);
+      gb.add(cube(), kerb, [dx * 0.468, 0.026, dz * 0.468], [0, 0, 0], [across ? 0.05 : 0.97, 0.014, across ? 0.97 : 0.05]);
     }
-    gb.add(cube(), C.iron, [0.36, 0.03, -0.36], [0, 0, 0], [0.07, 0.012, 0.07]);
+    // A drain with its iron grate, and a couple of worn stones.
+    gb.add(cube(), mixHex(C.stoneDark, C.ink, 0.4), [0.3, 0.016, -0.3], [0, 0, 0], [0.085, 0.014, 0.085]);
+    for (let i = 0; i < 3; i++) {
+      gb.add(cube(), C.iron, [0.272 + i * 0.028, 0.023, -0.3], [0, 0, 0], [0.012, 0.008, 0.07]);
+    }
+    for (let i = 0; i < 2; i++) {
+      gb.add(blob(), mixHex(C.stone, C.stoneLight, 0.6), [(rnd() - 0.5) * 0.7, 0.026, (rnd() - 0.5) * 0.7], [0, rnd() * 3, 0], [0.05, 0.012, 0.04]);
+    }
   },
 
-  square: (gb) => {
-    builders.plaza(gb, () => 0.5, 1, 0);
-    gb.add(plate(), C.stone, [0, 0.11, 0], [0, 0, 0], [0.46, 0.14, 0.46]);
-    gb.add(plate(), C.water, [0, 0.17, 0], [0, 0, 0], [0.36, 0.03, 0.36]);
-    gb.add(plate(), C.stoneDark, [0, 0.18, 0], [0, 0, 0], [0.08, 0.16, 0.08]);
-    gb.add(blob(), C.ink, [0, 0.28, 0], [0, 0, 0], [0.09, 0.09, 0.09]);
-    bench(gb, 0.4, 0.34, 0.4);
-    bench(gb, -0.4, -0.3, -0.5);
+  square: (gb, _rnd, _level, links) => {
+    builders.plaza(gb, () => 0.5, 1, links);
+    fountain(gb, 1);
+    bench(gb, 0.28, 0.3, 0.4);
+    bench(gb, -0.28, -0.3, -0.5);
     tree(gb, -0.36, 0.36, 0.55, () => 0.4);
   },
 
@@ -1197,7 +1265,7 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
       gb.add(cube(), C.stoneLight, [x, 0.33, z], [0, 0, 0], [0.08, 0.03, 0.08]);
     }
     gb.add(cube(), C.cloth, [0, 0.09, -0.04], [0, 0, 0], [0.24, 0.02, 0.18]);
-    bench(gb, 0.34, 0.3, 0.4);
+    bench(gb, 0.3, 0.28, 0.4);
     gb.light(-0.2, 0.32, 0.24, 0.9);
     gb.light(0.2, 0.32, 0.24, 0.9);
     void rnd;
@@ -1671,23 +1739,32 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
       gb.add(cube(), C.leafDeep, [x, 0.05, z], [0, 0, 0], [w, 0.1, d]);
       gb.add(cube(), C.leaf, [x, 0.105, z], [0, 0, 0], [w * 0.94, 0.02, d * 0.94]);
     }
-    for (const [x, z] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]] as const) {
-      gb.add(cube(), C.soil, [x, 0.014, z], [0, 0, 0], [0.26, 0.024, 0.26]);
+    // Three flower beds, and the fourth corner left for the bench: a bench
+    // dropped on a bed sinks into the soil and reads as a plank in the flowers.
+    for (const [x, z] of [[-0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]] as const) {
+      gb.add(cube(), C.soil, [x, 0.014, z], [0, 0, 0], [0.21, 0.024, 0.21]);
       for (let i = 0; i < 3; i++) {
-        gb.add(blob(), [C.clothWarm, C.lamp, C.cloth][i % 3], [x + (rnd() - 0.5) * 0.18, 0.06, z + (rnd() - 0.5) * 0.18], [0, 0, 0], [0.045, 0.04, 0.045]);
+        gb.add(blob(), [C.clothWarm, C.lamp, C.cloth][i % 3], [x + (rnd() - 0.5) * 0.15, 0.05, z + (rnd() - 0.5) * 0.15], [0, 0, 0], [0.045, 0.04, 0.045]);
       }
     }
     gb.add(quad(), C.path, [0, 0.008, 0], [0, 0, 0], [0.14, 1, 0.8]);
     gb.add(quad(), C.path, [0, 0.009, 0], [0, Math.PI / 2, 0], [0.14, 1, 0.8]);
-    gb.add(plate(), C.stone, [0, 0.06, 0], [0, 0, 0], [0.15, 0.08, 0.15]);
-    gb.add(quad(), C.water, [0, 0.1, 0], [0, 0, 0], [0.11, 1, 0.11]);
-    bench(gb, 0.26, -0.26, -0.5);
+    // A bird bath is a stem and a shallow dish: a wide drum with water on top
+    // reads as a bucket in the middle of the beds.
+    gb.add(plate(), C.stoneDark, [0, 0.018, 0], [0, 0, 0], [0.13, 0.03, 0.13]);
+    gb.add(taper(), C.stone, [0, 0.03, 0], [0, 0, 0], [0.065, 0.088, 0.065]);
+    gb.add(plate(), C.stoneLight, [0, 0.124, 0], [0, 0, 0], [0.19, 0.022, 0.19]);
+    gb.add(plate(), C.stone, [0, 0.14, 0], [0, 0, 0], [0.15, 0.012, 0.15]);
+    gb.add(quad(), C.water, [0, 0.147, 0], [0, 0, 0], [0.11, 1, 0.11]);
+    // Its back to the corner and turned to the walk, so the seat is what you
+    // see: a bench seen from behind is just a plank against a hedge.
+    bench(gb, 0.17, -0.17, -0.6);
     // A dovecote on a pole, so the garden has something tall.
-    gb.add(cube(), C.woodDark, [0.06, 0.3, -0.32], [0, 0, 0], [0.02, 0.6, 0.02]);
-    gb.add(cube(), C.wood, [0.06, 0.5, -0.32], [0, 0, 0], [0.16, 0.02, 0.02]);
-    gb.add(cube(), C.cloth, [0.06, 0.6, -0.32], [0, 0, 0], [0.1, 0.14, 0.1]);
-    roofAt(gb, 0.06, -0.32, 0.08, 0.08, 0.1, C.roof, 0.67);
-    gb.add(cube(), C.ink, [0.06, 0.58, -0.26], [0, 0, 0], [0.03, 0.03, 0.02]);
+    gb.add(cube(), C.woodDark, [-0.32, 0.3, 0.32], [0, 0, 0], [0.02, 0.6, 0.02]);
+    gb.add(cube(), C.wood, [-0.32, 0.5, 0.32], [0, 0, 0], [0.16, 0.02, 0.02]);
+    gb.add(cube(), C.cloth, [-0.32, 0.6, 0.32], [0, 0, 0], [0.1, 0.14, 0.1]);
+    roofAt(gb, -0.32, 0.32, 0.08, 0.08, 0.1, C.roof, 0.67);
+    gb.add(cube(), C.ink, [-0.32, 0.58, 0.26], [0, 0, 0], [0.03, 0.03, 0.02]);
   },
 
   mirador: (gb, rnd) => {
@@ -1742,8 +1819,10 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
     grownTree(gb, 0.26, 0.3, 3, rnd);
     grownTree(gb, -0.3, 0.3, 2, rnd);
     tree(gb, 0.32, -0.22, 0.55, rnd);
-    bench(gb, -0.12, 0.06, 0.3);
-    bench(gb, 0.06, -0.06, -1.2);
+    // Two benches, neither crossing the other nor standing in the pond: one on
+    // the east bank looking west, one on the walk looking back at the water.
+    bench(gb, 0.06, -0.14, -1.571);
+    bench(gb, -0.04, 0.31, Math.PI);
     lamp(gb, -0.36, 0.04);
     lamp(gb, 0.34, 0.16);
     // Ducks on the pond.
@@ -1933,21 +2012,31 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
         gb.add(blob(), i % 2 ? C.clothWarm : C.lamp, [x + (rnd() - 0.5) * 0.16, 0.045, z + (rnd() - 0.5) * 0.16], [0, 0, 0], [0.035, 0.03, 0.035]);
       }
     }
-    // Central fountain: octagonal basin, water, pedestal and a small figure.
-    gb.add(plate(), C.stone, [0, 0.06, 0], [0, 0, 0], [0.34, 0.1, 0.34]);
-    gb.add(plate(), C.stoneLight, [0, 0.11, 0], [0, 0, 0], [0.3, 0.03, 0.3]);
-    gb.add(quad(), C.water, [0, 0.115, 0], [0, 0, 0], [0.22, 1, 0.22]);
-    gb.add(post(), C.stone, [0, 0.18, 0], [0, 0, 0], [0.07, 0.18, 0.07]);
-    gb.add(plate(), C.stoneLight, [0, 0.28, 0], [0, 0, 0], [0.1, 0.02, 0.1]);
-    gb.add(blob(), C.stoneLight, [0, 0.33, 0], [0, 0, 0], [0.08, 0.1, 0.06]);
-    gb.add(cube(), C.stoneLight, [0.05, 0.36, 0], [0, 0, 0.5], [0.12, 0.02, 0.02]);
-    gb.add(cone(), C.water, [0, 0.3, 0], [0, 0, 0], [0.06, 0.1, 0.06]);
-    gb.light(0, 0.2, 0.1, 1);
-    // Urns on stone plinths at the corners.
-    for (const [x, z] of [[-0.32, 0], [0.32, 0], [0, -0.32], [0, 0.32]] as const) {
-      gb.add(cube(), C.stoneDark, [x, 0.09, z], [0, 0, 0], [0.08, 0.18, 0.08]);
-      gb.add(plate(), C.stoneLight, [x, 0.2, z], [0, 0, 0], [0.1, 0.06, 0.08]);
-      gb.add(blob(), C.leaf, [x, 0.24, z], [0, rnd() * 3, 0], [0.11, 0.07, 0.1]);
+    fountain(gb, 0.74);
+    // Urns on stone plinths at the corners: a square plinth with a moulded cap,
+    // a rounded belly that swells and then flares into a lip, and a plant
+    // spilling over the rim.
+    for (const [x, z] of [[-0.3, 0], [0.3, 0], [0, -0.3], [0, 0.3]] as const) {
+      gb.add(cube(), C.stoneLight, [x, 0.012, z], [0, 0, 0], [0.13, 0.024, 0.13]);
+      gb.add(cube(), C.stone, [x, 0.074, z], [0, 0, 0], [0.08, 0.1, 0.08]);
+      gb.add(cube(), C.stoneLight, [x, 0.132, z], [0, 0, 0], [0.104, 0.016, 0.104]);
+      // The vase, narrow at the foot, widest halfway up, open at the lip.
+      for (const [y, h, d] of [[0.148, 0.016, 0.05], [0.166, 0.02, 0.072], [0.184, 0.018, 0.08], [0.199, 0.014, 0.068], [0.21, 0.012, 0.084]] as const) {
+        gb.add(plate(), C.stoneLight, [x, y, z], [0, 0, 0], [d, h, d]);
+      }
+      // Planting: a mound in the mouth and three strands hanging over the lip.
+      gb.add(puff(), C.leaf, [x, 0.222, z], [0, rnd() * 3, 0], [0.09, 0.055, 0.085]);
+      gb.add(puff(), C.leafDeep, [x + 0.01, 0.24, z - 0.01], [0, rnd() * 3, 0], [0.055, 0.04, 0.05]);
+      for (let i = 0; i < 3; i++) {
+        const a = rnd() * Math.PI * 2;
+        gb.add(
+          blob(),
+          i === 1 ? C.leafDeep : C.leaf,
+          [x + Math.cos(a) * 0.042, 0.196 - i * 0.008, z + Math.sin(a) * 0.042],
+          [rnd(), rnd() * 3, 0],
+          [0.042, 0.05, 0.038],
+        );
+      }
     }
   },
 
