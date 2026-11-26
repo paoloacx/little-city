@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { GRID, HALF, Town, isChannel, key as gridKey, landAt, makeIsland, rng, worldX, worldZ } from './grid';
-import { GeoBuilder, Light, blob, cone, cube, mixHex, panel, patch, post, quad } from './geo';
+import { GeoBuilder, Light, blob, cone, cube, mixHex, panel, patch, post, puff, quad } from './geo';
 import { Resolved, resolveTown } from './rules';
 import { buildRole } from './buildings';
 import { Weather, getSeason } from './season';
@@ -30,7 +30,7 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0);
 /** One day and one night. */
 const CYCLE = 210;
 /** How much the ground rises at each hill terrace. */
-const HILL_STEP = 0.05;
+const HILL_STEP = 0.07;
 /** Inland water runs just under the grass: a stream you can step over. */
 const RIVER_Y = -0.13;
 const RIVER_BED = -0.23;
@@ -136,6 +136,8 @@ export class World {
   private readonly canvas: HTMLCanvasElement;
   private readonly terrain = new THREE.Group();
   private readonly townGroup = new THREE.Group();
+  /** Garlands, lanterns and flags: only while the town is having a party. */
+  private readonly fiestaGroup = new THREE.Group();
   private readonly ghost = new THREE.Group();
   private readonly surface = inkMaterial();
   private readonly outline = inkOutlineMaterial(0.008);
@@ -181,6 +183,13 @@ export class World {
   private island: boolean[][] | null = null;
   /** Slow field that decides where the ground rolls, cell by cell. */
   private hills: (x: number, z: number) => number = () => 0;
+  /** Hills the player made by hand; they win over the island's own ground. */
+  private edited: Map<string, number> | null = null;
+  /** The party: garlands over the streets and people dancing. */
+  private fiesta = false;
+  private fiestaLights: Light[] = [];
+  /** The town of the last rebuild, so a party can be hung without waiting. */
+  private standing: Town | null = null;
   /** The same slow field the grass tone uses, so a hill matches its ground. */
   private grass: (x: number, z: number) => number = () => 0;
   private disposed = false;
@@ -202,7 +211,7 @@ export class World {
     this.renderer.setClearColor(PAPER, 1);
     THREE.ColorManagement.enabled = false;
 
-    this.scene.add(this.terrain, this.townGroup, this.life.group, this.ghost);
+    this.scene.add(this.terrain, this.townGroup, this.fiestaGroup, this.life.group, this.ghost);
     this.scene.background = new THREE.Color(PAPER);
 
     this.ghostBox.visible = false;
@@ -262,6 +271,8 @@ export class World {
   /** Builds the island plate: a grassy top, a sandy lip and the cliff below. */
   setSeed(seed: number): void {
     this.seed = seed;
+    // The town that follows brings its own hills back in `rebuild`.
+    this.edited = null;
     this.mask = this.island ?? makeIsland(seed);
     this.clearCellCache();
     this.clearGroup(this.terrain);
@@ -523,8 +534,19 @@ export class World {
     }
   }
 
-  /** How high the ground stands on a cell: zero, one step or two. */
+  /** How high the ground stands on a cell: the player's hill, or the island's. */
+  groundLevel(x: number, z: number): number {
+    return this.hillLevel(x, z);
+  }
+
+  /** How high the ground stands on a cell: zero, one step or two, or more by hand. */
   private hillLevel(x: number, z: number): number {
+    const lift = this.edited?.get(gridKey(x, z));
+    return lift !== undefined ? lift : this.naturalLevel(x, z);
+  }
+
+  /** The hill the island drew here, ignoring any shovel: 0, 1 or 2 steps. */
+  naturalLevel(x: number, z: number): number {
     const rise = this.hills(x, z);
     return rise < 0.54 ? 0 : rise < 0.72 ? 1 : 2;
   }
@@ -543,7 +565,14 @@ export class World {
     this.timings.build = 0;
     this.timings.merge = 0;
     this.timings.life = 0;
-    const resolved = resolveTown(town, this.mask);
+    this.standing = town;
+    const hills = town.ground ?? null;
+    if (hills !== this.edited) {
+      this.edited = hills;
+      // People stand on the ground: a hill raised under them leaves them sunk.
+      this.lifeLayout = '';
+    }
+    const resolved = resolveTown(town, this.mask, (x, z) => this.hillLevel(x, z));
     this.clearGroup(this.townGroup);
     const parts: THREE.BufferGeometry[] = [];
     const mounds: THREE.BufferGeometry[] = [];
@@ -774,10 +803,114 @@ export class World {
       this.lifeHeights = heightsSig;
       this.life.rebuildSmoke(resolved, this.seed);
     }
-    this.life.setLights(lights);
+    this.buildFiesta(resolved);
+    this.life.setLights(this.fiesta ? [...lights, ...this.fiestaLights] : lights);
     this.timings.life = performance.now() - lifeStarted;
     this.timings.total = performance.now() - started;
     return resolved;
+  }
+
+  /** Turns the party on or off: garlands, lanterns and dancing. */
+  setFiesta(on: boolean): void {
+    if (this.fiesta === on) return;
+    this.fiesta = on;
+    this.life.setFiesta(on);
+    if (this.standing) this.rebuild(this.standing);
+    if (!on) this.clearGroup(this.fiestaGroup);
+  }
+
+  get fiestaOn(): boolean {
+    return this.fiesta;
+  }
+
+  /**
+   * A rope from a house to the house across the street, with its pennants and a
+   * lantern every few steps, and strings over the square. It hangs on the street,
+   * never on the roofs.
+   */
+  private buildFiesta(resolved: Map<string, Resolved>): void {
+    this.clearGroup(this.fiestaGroup);
+    this.fiestaLights = [];
+    if (!this.fiesta) return;
+    const gb = new GeoBuilder();
+    const open = new Set(['street', 'quay', 'plaza', 'square', 'bandstand', 'theatre']);
+    const square = new Set(['plaza', 'square', 'bandstand', 'theatre']);
+    const flags = [0xe0674f, 0xf0c05a, 0x6fa8d0, 0xf2ece0, 0x8fbf6a];
+    const ropeTone = 0x6a5a48;
+    let count = 0;
+    // Tied to the wall, a little under the eaves: above the roof it would float.
+    const wallTop = (cell: Resolved): number => 0.34 + Math.min(cell.storeys, 5) * 0.12;
+
+    const hang = (ax: number, ay: number, az: number, bx: number, by: number, bz: number): void => {
+      const steps = 8;
+      const sag = 0.08 + Math.abs(ay - by) * 0.12;
+      const span = Math.hypot(bx - ax, bz - az);
+      const segLen = span / steps;
+      const alongX = Math.abs(bx - ax) > Math.abs(bz - az);
+      for (let i = 0; i < steps; i++) {
+        const t0 = i / steps;
+        const t1 = (i + 1) / steps;
+        const y0 = ay + (by - ay) * t0 - sag * 4 * t0 * (1 - t0);
+        const y1 = ay + (by - ay) * t1 - sag * 4 * t1 * (1 - t1);
+        const mx = ax + (bx - ax) * ((t0 + t1) / 2);
+        const mz = az + (bz - az) * ((t0 + t1) / 2);
+        const dy = y1 - y0;
+        const slope = Math.atan2(dy, segLen);
+        const length = Math.hypot(segLen, dy);
+        if (alongX) gb.add(cube(), ropeTone, [mx, (y0 + y1) / 2, mz], [0, 0, slope], [length + 0.01, 0.014, 0.014]);
+        else gb.add(cube(), ropeTone, [mx, (y0 + y1) / 2, mz], [-slope, 0, 0], [0.014, 0.014, length + 0.01]);
+        if (i % 2 === 1) {
+          const tone = flags[count % flags.length];
+          gb.add(cube(), tone, [mx, (y0 + y1) / 2 - 0.05, mz], [0, 0, 0], alongX ? [0.055, 0.08, 0.008] : [0.008, 0.08, 0.055]);
+          if (count % 3 === 1) {
+            gb.add(puff(), 0xf6d7a0, [mx, (y0 + y1) / 2 - 0.075, mz], [0, 0, 0], [0.07, 0.085, 0.07]);
+            this.fiestaLights.push({ x: mx, y: (y0 + y1) / 2 - 0.08, z: mz, size: 0.8 });
+          }
+          count++;
+        }
+      }
+    };
+
+    for (const cell of resolved.values()) {
+      if (open.has(cell.role)) continue;
+      for (const [dx, dz] of [
+        [1, 0],
+        [0, 1],
+      ] as Array<[number, number]>) {
+        const between = resolved.get(gridKey(cell.x + dx, cell.z + dz));
+        const far = resolved.get(gridKey(cell.x + 2 * dx, cell.z + 2 * dz));
+        if (!between || !far) continue;
+        if (!open.has(between.role) || open.has(far.role)) continue;
+        // A tree across the way has no wall to tie the rope to.
+        if (far.block === 'tree') continue;
+        hang(
+          worldX(cell.x) + dx * 0.44,
+          wallTop(cell),
+          worldZ(cell.z) + dz * 0.44,
+          worldX(far.x) - dx * 0.44,
+          wallTop(far),
+          worldZ(far.z) - dz * 0.44,
+        );
+      }
+    }
+
+    // The square gets its own criss-cross of paper, high enough to read from above.
+    for (const cell of resolved.values()) {
+      if (!square.has(cell.role)) continue;
+      if ((cell.x + cell.z) % 2 !== 0) continue;
+      const cx = worldX(cell.x);
+      const cz = worldZ(cell.z);
+      const height = 0.82 + Math.min(cell.storeys, 3) * 0.06;
+      hang(cx - 0.46, height, cz, cx + 0.46, height, cz);
+      hang(cx, height, cz - 0.46, cx, height, cz + 0.46);
+    }
+
+    const geometry = gb.build();
+    if (!geometry) return;
+    const mesh = new THREE.Mesh(geometry, this.surface);
+    mesh.frustumCulled = false;
+    this.fiestaGroup.add(mesh);
+    this.fiestaGroup.userData.geometries = new Set([geometry]);
   }
 
   /** Forgets every cached tile: used when the island changes under the town. */
@@ -800,10 +933,11 @@ export class World {
     if (!on) return;
     const wx = worldX(x) * TILE;
     const wz = worldZ(z) * TILE;
+    const baseY = this.hillLevel(x, z) * HILL_STEP;
     const height = 0.32 + (level - 1) * 0.16;
     this.ghostBox.scale.set(1, height / 0.62, 1);
-    this.ghostBox.position.set(wx, height / 2, wz);
-    this.ghostPad.position.set(wx, 0.02, wz);
+    this.ghostBox.position.set(wx, baseY + height / 2, wz);
+    this.ghostPad.position.set(wx, baseY + 0.02, wz);
     (this.ghostMat.uniforms.uInk.value as THREE.Color).copy(kind === 'erase' ? this.eraseInk : this.ghostInk);
     this.ghostMat.uniforms.uAlpha.value = kind === 'erase' ? 0.32 : 0.22;
   }

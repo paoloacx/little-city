@@ -1,4 +1,4 @@
-/** The first visit: four things worth knowing before placing anything. */
+/** The first visit: five things worth knowing before placing anything. */
 
 const INTRO_KEY = 'ciudad-pequena.intro';
 
@@ -7,6 +7,7 @@ const TIPS: Array<[string, string]> = [
   ['Todo se mezcla', 'Lo que sale depende de los vecinos: casa junto a torre, jardín junto a plaza, campo junto a jardín.'],
   ['Se desbloquea jugando', 'Campo, muelle, molino, jardín y muralla se ganan con hallazgos. La paleta enseña cuántos faltan.'],
   ['Pincel y deshacer', 'Arrastra con el pincel para pintar varias casillas; Ctrl+Z deshace. El clic derecho sube a cinco de golpe.'],
+  ['El suelo también se construye', 'Con Terreno (T) levantas la casilla un escalón; el botón derecho la baja. Un jardín en lo alto se vuelve mirador.'],
 ];
 
 export function introSeen(): boolean {
@@ -28,7 +29,7 @@ export function openIntro(onClose: () => void): void {
   card.className = 'lc-guide-card';
 
   const title = document.createElement('h2');
-  title.textContent = 'Cuatro cosas y a construir';
+  title.textContent = 'Cinco cosas y a construir';
 
   const list = document.createElement('ul');
   list.className = 'lc-intro-list';

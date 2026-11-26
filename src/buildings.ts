@@ -1690,6 +1690,45 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
     gb.add(cube(), C.ink, [0.06, 0.58, -0.26], [0, 0, 0], [0.03, 0.03, 0.02]);
   },
 
+  mirador: (gb, rnd) => {
+    // A garden that climbed a hill: a stone terrace on the slope, a low parapet
+    // to lean on and a bench looking out over the town.
+    gb.add(cube(), C.stoneDark, [0, 0.014, 0], [0, 0, 0], [1.0, 0.028, 1.0]);
+    gb.add(cube(), C.stoneLight, [0, 0.04, 0], [0, 0, 0], [0.94, 0.022, 0.94]);
+    for (let i = 0; i < 6; i++) {
+      const px = (rnd() - 0.5) * 0.7;
+      const pz = (rnd() - 0.5) * 0.7;
+      const w = 0.18 + rnd() * 0.1;
+      gb.add(cube(), i % 2 ? C.stone : mixHex(C.stoneLight, C.stone, 0.45), [px, 0.053, pz], [0, rnd() * 3, 0], [w, 0.012, w * 0.8]);
+    }
+    // Parapet on three sides, open to the view: a low wall with its cap stone.
+    const wall = (x: number, z: number, w: number, d: number): void => {
+      gb.add(cube(), C.stone, [x, 0.1, z], [0, 0, 0], [w, 0.1, d]);
+      gb.add(cube(), C.stoneLight, [x, 0.157, z], [0, 0, 0], [w + 0.02, 0.018, d + 0.02]);
+    };
+    wall(0, -0.44, 0.9, 0.06);
+    wall(-0.44, 0.02, 0.06, 0.86);
+    wall(0.44, 0.02, 0.06, 0.86);
+    // Pilaritos en las esquinas, y yedra colgando del pretil.
+    for (const [cx, cz] of [[-0.44, -0.44], [0.44, -0.44], [-0.44, 0.43], [0.44, 0.43]] as Array<[number, number]>) {
+      gb.add(cube(), C.stoneLight, [cx, 0.16, cz], [0, 0, 0], [0.1, 0.12, 0.1]);
+      gb.add(cube(), C.stone, [cx, 0.225, cz], [0, 0, 0], [0.12, 0.02, 0.12]);
+    }
+    for (let i = 0; i < 3; i++) {
+      gb.add(blob(), C.leaf, [-0.3 + rnd() * 0.6, 0.14 + rnd() * 0.06, -0.44 + (rnd() - 0.5) * 0.1], [0, rnd() * 3, 0], [0.12, 0.09, 0.1]);
+    }
+    bench(gb, 0, -0.24, 0);
+    lamp(gb, -0.36, 0.24);
+    // Dos macetas de boj.
+    for (const [px, pz] of [[0.34, 0.3], [-0.3, 0.33]] as Array<[number, number]>) {
+      gb.add(cube(), C.soil, [px, 0.06, pz], [0, 0, 0], [0.14, 0.03, 0.14]);
+      gb.add(blob(), C.leafDeep, [px, 0.13, pz], [0, rnd() * 3, 0], [0.17, 0.13, 0.17]);
+    }
+    // Un mástil con su banderín: el mirador se ve desde lejos.
+    gb.add(post(), C.woodDark, [0.38, 0.17, -0.3], [0, 0, 0], [0.022, 0.4, 0.022]);
+    gb.add(cube(), C.clothWarm, [0.43, 0.53, -0.3], [0, 0, 0], [0.13, 0.08, 0.008]);
+  },
+
   park: (gb, rnd) => {
     // Bigger garden: pond, walks, three trees and benches.
     gb.add(quad(), C.lawn, [0, 0.004, 0], [0, 0, 0], [0.96, 1, 0.96]);

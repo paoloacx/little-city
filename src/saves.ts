@@ -5,6 +5,8 @@ import { BlockKind } from './grid';
 export interface SlotData {
   seed: number;
   blocks: [number, number, BlockKind, number, number?][];
+  /** The hills the player made, cell by cell. */
+  ground?: [number, number, number][];
   found: string[];
   clicks: number;
   savedAt: number;
@@ -23,9 +25,13 @@ export function loadSlots(): Array<SlotData | null> {
     return empty.map((_, index) => {
       const entry = parsed[index] as SlotData | undefined;
       if (!entry || typeof entry.seed !== 'number' || !Array.isArray(entry.blocks)) return null;
+      const ground = Array.isArray(entry.ground)
+        ? (entry.ground.filter((g) => Array.isArray(g) && g.length >= 3) as [number, number, number][])
+        : [];
       return {
         seed: entry.seed,
         blocks: entry.blocks.filter((b) => Array.isArray(b) && b.length >= 4) as SlotData['blocks'],
+        ground,
         found: Array.isArray(entry.found) ? entry.found.filter((f): f is string => typeof f === 'string') : [],
         clicks: typeof entry.clicks === 'number' ? entry.clicks : 0,
         savedAt: typeof entry.savedAt === 'number' ? entry.savedAt : Date.now(),

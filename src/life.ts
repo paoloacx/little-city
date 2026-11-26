@@ -120,6 +120,13 @@ export class Life {
    */
   ground: (wx: number, wz: number) => number = () => 0;
 
+  /** A party: the town dances. It changes the bounce, never the figures. */
+  private fiesta = false;
+
+  setFiesta(on: boolean): void {
+    this.fiesta = on;
+  }
+
   /** People (walkers and idlers) and the rest (animals, boats, balloon). */
   private readonly peopleGroup = new THREE.Group();
   private readonly propsGroup = new THREE.Group();
@@ -401,8 +408,12 @@ export class Life {
     this.weatherLook = null;
     if (kind === 'none') return;
 
-    const snow = kind === 'snow';
-    const material = weatherMaterial(snow ? 0xffffff : kind === 'petal' ? 0xf2bfcb : 0xc4863c, !snow, snow ? 0.12 : kind === 'petal' ? 0.14 : 0.2, snow ? 0.5 : 0.75);
+    // Snow falls straight, a petal flutters, and the paper of a party drifts
+    // down slow and golden over the whole island.
+    const colour = kind === 'snow' ? 0xffffff : kind === 'petal' ? 0xf2bfcb : kind === 'confetti' ? 0xf3cf72 : 0xc4863c;
+    const size = kind === 'snow' ? 0.12 : kind === 'petal' ? 0.14 : kind === 'confetti' ? 0.19 : 0.2;
+    const fall = kind === 'snow' ? 0.5 : kind === 'confetti' ? 0.42 : 0.75;
+    const material = weatherMaterial(colour, kind !== 'snow' && kind !== 'confetti', size, fall);
     material.uniforms.uTime.value = this.time;
     this.weatherLook = material;
 
@@ -475,7 +486,8 @@ export class Life {
       const gy = this.ground(ax, az) * (1 - t) + this.ground(bx, bz) * t;
       walker.group.position.set(ax + (bx - ax) * t, gy, az + (bz - az) * t);
       if (bx !== ax || bz !== az) walker.group.rotation.y = Math.atan2(bx - ax, bz - az);
-      walker.group.position.y = gy + Math.abs(Math.sin((time + walker.phase) * 7)) * 0.012;
+      const step = this.fiesta ? 0.036 : 0.012;
+      walker.group.position.y = gy + Math.abs(Math.sin((time + walker.phase) * (this.fiesta ? 4.6 : 7))) * step;
 
       const stride = walking ? Math.sin((time + walker.phase) * 9) * 0.5 : 0;
       walker.legL.rotation.x = stride;
@@ -485,12 +497,19 @@ export class Life {
     }
 
     for (const idler of this.idlers) {
-      const sway = Math.sin((time + idler.phase) * 0.6);
-      idler.group.rotation.y = idler.base + sway * 0.35;
+      const sway = Math.sin((time + idler.phase) * (this.fiesta ? 1.7 : 0.6));
+      idler.group.rotation.y = idler.base + sway * (this.fiesta ? 1.4 : 0.35);
       idler.group.position.y =
-        this.ground(idler.group.position.x, idler.group.position.z) + Math.abs(Math.sin((time + idler.phase) * 1.6)) * 0.006;
-      idler.armL.rotation.x = -sway * 0.15;
-      idler.armR.rotation.x = sway * 0.15;
+        this.ground(idler.group.position.x, idler.group.position.z) +
+        Math.abs(Math.sin((time + idler.phase) * (this.fiesta ? 4.2 : 1.6))) * (this.fiesta ? 0.03 : 0.006);
+      if (this.fiesta) {
+        idler.armL.rotation.x = -Math.abs(Math.sin((time + idler.phase) * 3.1)) * 0.9;
+        idler.armR.rotation.x = Math.abs(Math.sin((time + idler.phase) * 3.1)) * 0.9;
+      }
+      if (!this.fiesta) {
+        idler.armL.rotation.x = -sway * 0.15;
+        idler.armR.rotation.x = sway * 0.15;
+      }
     }
 
     for (const cat of this.cats) {

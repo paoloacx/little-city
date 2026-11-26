@@ -10,7 +10,7 @@
 
 export type SeasonId = 'primavera' | 'verano' | 'otono' | 'invierno';
 
-export type Weather = 'petal' | 'none' | 'leaf' | 'snow';
+export type Weather = 'petal' | 'none' | 'leaf' | 'snow' | 'confetti';
 
 export interface Season {
   id: SeasonId;

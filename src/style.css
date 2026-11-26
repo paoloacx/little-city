@@ -71,6 +71,19 @@ body::after {
   font-weight: 800;
 }
 
+.lc-town {
+  margin: 10px 0 0 !important;
+  font-size: 12.5px !important;
+  letter-spacing: 0.02em;
+  opacity: 0.72;
+  font-variant-numeric: tabular-nums;
+}
+
+.lc-town strong {
+  font-weight: 800;
+  opacity: 1;
+}
+
 .lc-head p {
   margin: 4px 0 0;
   font-size: 13.5px;
@@ -215,7 +228,7 @@ button.lc-quiet {
   display: flex;
   gap: 6px;
   padding: 8px;
-  max-width: min(720px, calc(100vw - 24px));
+  max-width: min(880px, calc(100vw - 24px));
   overflow-x: auto;
   background: color-mix(in srgb, var(--card) 90%, transparent);
   border: 1.6px solid var(--ink);
@@ -410,6 +423,7 @@ button:disabled { opacity: 0.45; cursor: default; }
   .lc-head { max-width: 52vw; }
   .lc-head h1 { font-size: 18px; }
   .lc-head p { display: none; }
+  .lc-town { display: none !important; }
   .lc-finds { width: 180px; padding: 9px 10px 8px; }
   .lc-finds-more button { font-size: 10.5px; }
   .lc-toast { bottom: 104px; }

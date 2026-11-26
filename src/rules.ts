@@ -17,6 +17,7 @@ export type Role =
   | 'plaza' | 'square' | 'theatre' | 'bandstand'
   | 'tree' | 'orchard'
   | 'garden' | 'park' | 'greenhouse' | 'maze' | 'arboretum' | 'parterre' | 'watergarden'
+  | 'mirador'
   | 'wall' | 'rampart' | 'bastion' | 'fortress' | 'alcazar' | 'gatehouse'
   | 'vineyard' | 'stable'
   | 'dock' | 'field';
@@ -77,6 +78,7 @@ export const ROLES: Record<Role, RoleDef> = {
   dock: { label: 'Embarcadero', special: false, how: 'Un muelle de tablas, en tierra o sobre el agua.' },
   field: { label: 'Campo', special: false, how: 'Un campo arado.' },
   garden: { label: 'Jardín', special: false, how: 'Un jardín con sus setos, sus flores y su pajarera.' },
+  mirador: { label: 'Mirador', special: true, how: 'Un jardín en lo alto (dos escalones o más): balaustrada y vistas.' },
   park: { label: 'Parque', special: true, how: 'Un jardín de dos clics: árboles, bancos y un estanque.' },
   greenhouse: { label: 'Invernadero', special: true, how: 'Un jardín de tres clics, con cristaleras.' },
   maze: { label: 'Laberinto', special: true, how: 'Un jardín de cuatro clics: setos en laberinto.' },
@@ -128,6 +130,8 @@ export interface Facts {
   land: boolean;
   /** Touches water. */
   shore: boolean;
+  /** Steps of ground under the cell: 0 low, 1 a terrace, 2 or 3 up a hill. */
+  ground: number;
   /** The tallest neighbour, and how many neighbours are three storeys or more. */
   top: number;
   tall: number;
@@ -146,6 +150,8 @@ export interface Rule {
 /** Ordered: the most specific rule wins. */
 export const RULES: Rule[] = [
   // Gardens and walls: they grow on their own, click by click.
+  // A garden up a hill is a mirador: the terrace is the thing you built.
+  { id: 'R-G07', role: 'mirador', when: (f) => f.block === 'garden' && f.ground >= 2 },
   { id: 'R-G06', role: 'watergarden', when: (f) => f.block === 'garden' && f.shore && f.level <= 2 },
   { id: 'R-G05', role: 'parterre', when: (f) => f.block === 'garden' && f.side.plaza >= 1 && f.level <= 2 },
   { id: 'R-G04', role: 'arboretum', when: (f) => f.block === 'garden' && f.level >= 5 },
@@ -269,6 +275,7 @@ export function gatherFacts(
   z: number,
   block: BlockKind,
   level: number,
+  ground = 0,
 ): Facts {
   const around = emptyCounts();
   const side = emptyCounts();
@@ -300,6 +307,7 @@ export function gatherFacts(
     level,
     top,
     tall,
+    ground,
     land: landAt(mask, x, z),
     shore: isShore(mask, x, z),
     around,
@@ -308,11 +316,15 @@ export function gatherFacts(
 }
 
 /** Resolves every placed block of the town in one pass. */
-export function resolveTown(town: Town, mask: boolean[][]): Map<string, Resolved> {
+export function resolveTown(
+  town: Town,
+  mask: boolean[][],
+  ground?: (x: number, z: number) => number,
+): Map<string, Resolved> {
   const out = new Map<string, Resolved>();
   for (const [k, placed] of town.blocks) {
     const [x, z] = k.split(',').map(Number);
-    const facts = gatherFacts(town, mask, x, z, placed.kind, placed.level);
+    const facts = gatherFacts(town, mask, x, z, placed.kind, placed.level, ground ? ground(x, z) : 0);
     const rule = RULES.find((r) => r.when(facts)) ?? null;
     // A house leans on its tall neighbour and gains a floor: nothing is broken,
     // the town just grows into itself.

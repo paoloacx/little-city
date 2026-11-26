@@ -1,6 +1,6 @@
 import './style.css';
 
-import { BLOCK_DEFS, BlockKind, MAX_LEVEL, Town, UNLOCK_AT, key, landAt, loadSaved, saveTown } from './grid';
+import { BLOCK_DEFS, BlockKind, MAX_GROUND, MAX_LEVEL, Town, UNLOCK_AT, key, landAt, loadSaved, saveTown } from './grid';
 import { ROLES, SPECIAL_COUNT } from './rules';
 import { growTown } from './grow';
 import { World } from './scene';
@@ -31,6 +31,8 @@ const guideEl = document.getElementById('guide') as HTMLButtonElement;
 const soundEl = document.getElementById('sound') as HTMLButtonElement;
 const cycleEl = document.getElementById('cycle') as HTMLButtonElement;
 const seasonEl = document.getElementById('season') as HTMLButtonElement;
+const fiestaEl = document.getElementById('fiesta') as HTMLButtonElement;
+const townNameEl = document.getElementById('town-name') as HTMLElement;
 const placeEl = document.getElementById('place') as HTMLButtonElement;
 const undoEl = document.getElementById('undo') as HTMLButtonElement;
 const rotateEl = document.getElementById('rotate') as HTMLButtonElement;
@@ -39,7 +41,7 @@ const brushEl = document.getElementById('brush') as HTMLButtonElement;
 const world = new World(canvas);
 const ambience = new Ambience();
 
-type Tool = BlockKind | 'erase';
+type Tool = BlockKind | 'erase' | 'ground';
 let tool: Tool = 'house';
 let town: Town;
 const found = new Set<string>();
@@ -56,6 +58,8 @@ interface Snapshot {
   seed: number;
   clicks: number;
   blocks: [string, BlockKind, number, number][];
+  /** The hills the player made, so undoing a shovel also undoes the hill. */
+  ground: [string, number][];
 }
 const undoStack: Snapshot[] = [];
 const HISTORY_MAX = 40;
@@ -102,6 +106,43 @@ const cachedPlace = readAnyCache();
 if (cachedPlace && seedOf(cachedPlace.lat, cachedPlace.lon) === town.seed) {
   world.setIsland(cachedPlace.mask);
 }
+/**
+ * A town with a name and a census: the seed picks the place, and the blocks you
+ * put down decide whether it is a hamlet, a village or a city.
+ */
+const NAMES = [
+  'Peñaflor', 'Valdemoro', 'Fuenteclara', 'Monteverde', 'Villahonda', 'Torrelavieja',
+  'Rocalba', 'Sotoviejo', 'Aguasal', 'Ladera Alta', 'Puentenuevo', 'Olivar del Valle',
+  'Las Cuestas', 'El Rincón', 'Bajomar', 'Altozano', 'Vegasol', 'Piedrahita',
+  'Chopera', 'Cantoverde', 'Los Tejares', 'Miramonte', 'Aguaverde', 'Peñalba',
+];
+
+function townTitle(seed: number, size: number): { name: string; title: string } {
+  let n = (seed >>> 0) ^ 0x9e3779b9;
+  n = Math.imul(n ^ (n >>> 15), 2246822519) >>> 0;
+  const name = NAMES[n % NAMES.length];
+  const title = size >= 90 ? 'Ciudad' : size >= 55 ? 'Pueblo' : size >= 26 ? 'Villa' : size >= 10 ? 'Aldea' : 'Rincón';
+  return { name, title };
+}
+
+/** Writes the name and the census under the title, at most once per change. */
+function paintTownName(): void {
+  const blocks = [...town.blocks.values()];
+  const count = (kind: BlockKind): number => blocks.filter((b) => b.kind === kind).length;
+  const houses = count('house');
+  const streets = count('path');
+  const trees = count('tree');
+  const { name, title } = townTitle(town.seed, blocks.length);
+  const top = blocks.reduce((most, b) => Math.max(most, b.level), 0);
+  const parts = [
+    `${houses} ${houses === 1 ? 'casa' : 'casas'}`,
+    `${streets} ${streets === 1 ? 'calle' : 'calles'}`,
+    `${trees} ${trees === 1 ? 'árbol' : 'árboles'}`,
+  ];
+  if (top >= 3) parts.push(`techo de ${top} pisos`);
+  townNameEl.innerHTML = `<strong>${title} de ${name}</strong> · ${parts.join(' · ')}`;
+}
+
 totalEl.textContent = String(SPECIAL_COUNT);
 boot();
 paintSeason();
@@ -124,6 +165,7 @@ function snapshot(): Snapshot {
     blocks: [...town.blocks].map(
       ([k, placed]) => [k, placed.kind, placed.level, placed.rot ?? 0] as [string, BlockKind, number, number],
     ),
+    ground: [...(town.ground ?? new Map<string, number>())],
   };
 }
 
@@ -141,6 +183,7 @@ function restore(snap: Snapshot): void {
   town = {
     seed: snap.seed,
     blocks: new Map(snap.blocks.map(([k, kind, level, rot]) => [k, { kind, level, rot }])),
+    ground: new Map(snap.ground),
   };
   clicks = snap.clicks;
   lastPlaced = null;
@@ -171,8 +214,8 @@ function isLocked(kind: BlockKind): boolean {
 
 function updateLocks(): void {
   for (const button of paletteEl.querySelectorAll('button')) {
-    const kind = button.dataset.tool as BlockKind | 'erase';
-    if (kind === 'erase') continue;
+    const kind = button.dataset.tool as BlockKind | 'erase' | 'ground';
+    if (kind === 'erase' || kind === 'ground') continue;
     const locked = isLocked(kind);
     button.classList.toggle('locked', locked);
     button.setAttribute('aria-disabled', String(locked));
@@ -216,6 +259,7 @@ function syncClicks(): void {
 }
 
 function syncPanel(): void {
+  paintTownName();
   countEl.textContent = String(found.size);
   if (recent.length === 0) {
     lastEl.textContent = found.size
@@ -259,19 +303,61 @@ function toast(message: string): void {
 
 const WATER_TILES: ReadonlySet<Tool> = new Set<Tool>(['path', 'dock']);
 
+/** The hills of this town, made as soon as a shovel touches the ground. */
+function hills(): Map<string, number> {
+  return (town.ground ??= new Map<string, number>());
+}
+
+/**
+ * One step of shovel: up with the left button, down with the right. When the new
+ * height is the one the island already had, the entry goes, so an untouched glen
+ * stays natural and the link stays short.
+ */
+function shovel(x: number, z: number, delta: 1 | -1): void {
+  if (!landAt(world.islandMask, x, z)) return;
+  const k = key(x, z);
+  const current = world.groundLevel(x, z);
+  const next = Math.min(MAX_GROUND, Math.max(0, current + delta));
+  if (next === current) {
+    toast(delta > 0 ? `Ya está en lo más alto: ${MAX_GROUND} escalones` : 'Ya está a ras del agua');
+    return;
+  }
+  pushHistory();
+  const map = hills();
+  if (next === world.naturalLevel(x, z)) map.delete(k);
+  else map.set(k, next);
+  clicks += 1;
+  syncClicks();
+  ambience.tick();
+  apply();
+  toast(
+    next === 0
+      ? 'Terreno rebajado: a ras del agua'
+      : `Terreno a ${next} ${next === 1 ? 'escalón' : 'escalones'} · botón derecho baja`,
+  );
+}
+
 function place(x: number, z: number): void {
   const land = landAt(world.islandMask, x, z);
   if (!land && !WATER_TILES.has(tool)) return;
-  if (tool !== 'erase' && isLocked(tool)) {
+  if (tool !== 'erase' && tool !== 'ground' && isLocked(tool)) {
     toast(`Se desbloquea con ${unlockNeed(tool)} hallazgos: llevas ${found.size}`);
     return;
   }
   const k = key(x, z);
 
+  if (tool === 'ground') {
+    shovel(x, z, 1);
+    return;
+  }
+
   if (tool === 'erase') {
-    if (!town.blocks.has(k)) return;
+    const hill = town.ground?.get(k);
+    if (!town.blocks.has(k) && hill === undefined) return;
     pushHistory();
     town.blocks.delete(k);
+    // Borrar also takes back the hill: one button for anything you put down.
+    town.ground?.delete(k);
     clicks += 1;
     syncClicks();
     ambience.tick();
@@ -309,13 +395,18 @@ function paintAt(x: number, z: number): void {
   lastPaint = { x, z };
   const land = landAt(world.islandMask, x, z);
   if (!land && !WATER_TILES.has(tool)) return;
-  if (tool !== 'erase' && isLocked(tool)) return;
+  if (tool !== 'erase' && tool !== 'ground' && isLocked(tool)) return;
   const k = key(x, z);
+  if (tool === 'ground') {
+    shovel(x, z, 1);
+    return;
+  }
   const current = town.blocks.get(k);
   if (tool === 'erase') {
-    if (!current) return;
+    if (!current && !town.ground?.has(k)) return;
     pushHistory();
     town.blocks.delete(k);
+    town.ground?.delete(k);
   } else {
     if (current && current.kind === tool) return;
     pushHistory();
@@ -334,6 +425,10 @@ function placeMax(x: number, z: number): void {
   if (!land && !WATER_TILES.has(tool)) return;
   if (tool === 'erase') {
     place(x, z);
+    return;
+  }
+  if (tool === 'ground') {
+    shovel(x, z, -1);
     return;
   }
   if (isLocked(tool)) {
@@ -409,6 +504,12 @@ function updateGhost(clientX: number, clientY: number): void {
   if (tool !== 'erase' && !hit.land && !WATER_TILES.has(tool)) {
     world.setGhost(null, null);
     hintEl.textContent = 'Aquí solo caben caminos y muelles';
+    return;
+  }
+  if (tool === 'ground') {
+    world.setGhost(hit.x, hit.z, 'erase', 1);
+    const here = world.groundLevel(hit.x, hit.z);
+    hintEl.textContent = `Terreno a ${here} ${here === 1 ? 'escalón' : 'escalones'} · clic sube · botón derecho baja`;
     return;
   }
   const current = town.blocks.get(key(hit.x, hit.z));
@@ -530,6 +631,10 @@ window.addEventListener('keydown', (event) => {
     select('erase');
     return;
   }
+  if (event.key === 't' || event.key === 'T') {
+    select('ground');
+    return;
+  }
   if (event.key === 'b' || event.key === 'B') {
     setBrush(!brush);
     return;
@@ -595,6 +700,21 @@ function renderPalette(): void {
   erase.addEventListener('click', () => select('erase'));
   frag.append(erase);
 
+  // The shovel: the island is not a table, and this is how you say so.
+  const shovelButton = document.createElement('button');
+  shovelButton.type = 'button';
+  shovelButton.dataset.tool = 'ground';
+  shovelButton.title = 'Terreno (T) — sube un escalón con el clic y lo baja con el botón derecho';
+  shovelButton.setAttribute('aria-pressed', 'false');
+  const shovelSwatch = document.createElement('span');
+  shovelSwatch.className = 'swatch';
+  shovelSwatch.style.setProperty('--swatch', 'linear-gradient(180deg, #b7d094 0 46%, #9a7a54 46% 100%)');
+  const shovelLabel = document.createElement('span');
+  shovelLabel.textContent = 'Terreno';
+  shovelButton.append(shovelSwatch, shovelLabel);
+  shovelButton.addEventListener('click', () => select('ground'));
+  frag.append(shovelButton);
+
   paletteEl.append(frag);
 }
 
@@ -608,6 +728,38 @@ function setBrush(on: boolean): void {
 }
 
 brushEl.addEventListener('click', () => setBrush(!brush));
+
+/* ------------------------------------------------------------- the party */
+
+let fiesta = false;
+let fiestaTimer: number | null = null;
+
+function setFiesta(on: boolean, announce = true): void {
+  fiesta = on;
+  world.setFiesta(on);
+  fiestaEl.textContent = on ? 'Fiesta: sí' : 'Fiesta: no';
+  fiestaEl.setAttribute('aria-pressed', String(on));
+  if (fiestaTimer !== null) {
+    window.clearTimeout(fiestaTimer);
+    fiestaTimer = null;
+  }
+  world.setWeather(on ? 'confetti' : getSeason().weather);
+  if (on) {
+    // The party runs a while and then the town goes back to its evening: long
+    // enough to walk around it, short enough to be a moment.
+    fiestaTimer = window.setTimeout(() => {
+      if (!fiesta) return;
+      setFiesta(false, false);
+      toast('La fiesta se apaga: hasta la próxima');
+    }, 90_000);
+    if (announce) toast('¡Fiesta! Guirnaldas, farolillos y baile');
+    ambience.tick();
+  } else if (announce) {
+    toast('Fiesta recogida');
+  }
+}
+
+fiestaEl.addEventListener('click', () => setFiesta(!fiesta));
 undoEl.addEventListener('click', () => undo());
 rotateEl.addEventListener('click', () => rotateBlock());
 
@@ -700,7 +852,8 @@ function applySeason(season: Season, announce = false): void {
   paintSeason();
   world.setSeed(town.seed);
   resolve(false);
-  world.setWeather(season.weather);
+  // A party keeps its own weather when the year turns.
+  world.setWeather(fiesta ? 'confetti' : season.weather);
   try {
     localStorage.setItem(SEASON_KEY, season.id);
   } catch {
@@ -778,6 +931,10 @@ const savesEl = document.getElementById('saves') as HTMLButtonElement;
 function currentSlot(): SlotData {
   return {
     seed: town.seed,
+    ground: [...(town.ground ?? new Map<string, number>())].map(([k, level]) => {
+      const [x, z] = k.split(',').map(Number);
+      return [x, z, level] as [number, number, number];
+    }),
     blocks: [...town.blocks].map(([k, placed]) => {
       const [x, z] = k.split(',').map(Number);
       return [x, z, placed.kind, placed.level, placed.rot ?? 0] as [number, number, BlockKind, number, number];
@@ -793,6 +950,7 @@ function loadSlot(data: SlotData): void {
   town = {
     seed: data.seed,
     blocks: new Map(data.blocks.map(([x, z, kind, level, rot]) => [key(x, z), { kind, level, rot: rot ?? 0 }])),
+    ground: new Map((data.ground ?? []).map(([x, z, level]) => [key(x, z), level])),
   };
   found.clear();
   for (const role of data.found) found.add(role);
@@ -854,7 +1012,11 @@ if (Number.isFinite(hour) && hour >= 0) world.setPhase(hour);
 if (import.meta.env.DEV) {
   (window as unknown as { __ciudad: unknown }).__ciudad = {
     world,
-    town,
+    // A getter: the town is replaced on grow, undo and load, and a stale copy
+    // would lie to the console.
+    get town() {
+      return town;
+    },
     stats: () => world.stats(),
     rebuild: (times = 1): number => {
       const started = performance.now();

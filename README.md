@@ -3,7 +3,7 @@
 Un diorama de pueblo dibujado a mano, en el navegador: colocas bloques en una isla y cada uno se
 convierte en algo distinto según sus vecinos y su altura, hasta cinco pisos. Es un MVP propio,
 inspirado en la mecánica de [Little City](https://littlecity.io) de Derek Yao, sin usar su código ni
-su arte: **62 formas** distintas, **52 hallazgos**, bloques que se desbloquean jugando y cuatro islas
+su arte: **63 formas** distintas, **53 hallazgos**, bloques que se desbloquean jugando y cuatro islas
 distintas.
 
 ```bash
@@ -29,17 +29,23 @@ npm run preview  # sirve dist/
   decide lo que se dibuja. Además, **una casa pegada a algo mucho más alto gana un piso** (sin
   romperse): el pueblo crece hacia dentro, no se pisa.
 - Arrastra para girar la isla; rueda o pellizco para acercarte.
-- Atajos: `1`–`9` y `0` eligen bloque, `B` el pincel, `E` borra, `Ctrl`+`Z` deshace.
+- Atajos: `1`–`9` y `0` eligen bloque, `T` la pala, `B` el pincel, `E` borra, `R` gira, `Ctrl`+`Z`
+  deshace.
 - **Crecer** genera un pueblo nuevo en otra isla, y cada isla es distinta: **prado**, **bosque**,
   **dunas** o **roquedo**, con sus flores, setas, conchas o peñascos. **Vaciar** deja la isla en
   blanco.
 - **Compartir** copia un enlace con el pueblo dentro (el estado va en el `#` de la URL, sin servidor);
-  **Postal** descarga el diorama en PNG; **Guía** lista los 52 hallazgos; **Pueblos** guarda tres
+  **Postal** descarga el diorama en PNG; **Guía** lista los 53 hallazgos; **Pueblos** guarda tres
   partidas en el navegador para volver a ellas; **Foto** esconde la interfaz (Esc sale); **Sonido**
   enciende el viento y las gaviotas; **Ciclo** pone el día y la noche en marcha; **Estación** da la
   vuelta al año y **Lugar real** dibuja un barrio de OpenStreetMap en el tablero.
 - Al entrar por primera vez sale una tarjeta con las cuatro reglas del juego, y no vuelve a salir.
 - Caminos y muelles se pueden poner **sobre el agua**: un camino sobre el agua es un puente.
+- Con **Terreno** (`T`) levantas la casilla un escalón: hasta tres. El **botón derecho** la baja, y
+  **Borrar** devuelve la casilla al suelo que tenía la isla. La obra va con el pueblo: se guarda, se
+  deshace y viaja en el enlace.
+- **Fiesta** cuelga guirnaldas sobre las calles, cruza la plaza de banderines, enciende farolillos y
+  pone a bailar a la gente, con confeti cayendo. Dura minuto y medio y se apaga sola.
 - El pueblo se guarda solo en `localStorage` y se recupera al volver.
 
 ## Las cinco alturas
@@ -79,7 +85,7 @@ Y lo que pasa alrededor:
   casillas de alrededor, sin que nada se pierda.
 - La guía muestra los hallazgos que ya has visto y los que faltan en gris.
 
-## Los 52 hallazgos
+## Los 53 hallazgos
 
 Los edificios se pueden girar: con el botón **Girar** o la tecla **R**, sobre el que esté bajo el
 puntero o sobre el último que pusiste. Un cuarto de vuelta cada vez, y el giro se guarda con el
@@ -217,15 +223,39 @@ La isla no es un mantel: el terreno ondula, el agua entra tierra adentro y el bo
   que una calle de cinco casillas se ve como una sola calle y no como cinco losas. Por donde corre
   lleva dos **rodadas** de carro, y en los bordes, bordillo de piedra y su sombra.
 
+## Terreno, mirador, nombre y fiesta
+
+Cuatro cosas que no estaban en la referencia y que hacen que el pueblo sea tuyo.
+
+- **La pala.** El terreno de la isla ya venía ondulado; ahora también lo puedes cambiar tú. Cada clic
+  sube la casilla un escalón (hasta tres), el botón derecho la baja y **Borrar** la devuelve a su
+  altura natural. Todo lo que se apoya encima sube con ella: casas, árboles, calles, y hasta la gente
+  que pasa por delante. Los escalones se dibujan solos en los bordes —labio de hierba y talud—, así que
+  una loma hecha a mano se ve igual que una de la isla. Las alturas van en `Town.ground`, se guardan
+  en `localStorage`, se deshacen con `Ctrl`+`Z` y viajan en el enlace detrás de un `~`, de modo que los
+  enlaces antiguos (sin colinas) siguen funcionando.
+- **Construir en alto se nota.** Un jardín en una terraza de dos escalones o más ya no es un jardín: es
+  un **Mirador**, con su solado de piedra, su pretil de tres lados abierto a las vistas, su banco, sus
+  macetas y su banderín. Es la regla `R-G07`, y es la primera que mira la altura del suelo
+  (`facts.ground`) además de los vecinos: cuanto más juegas con la pala, más cambia el pueblo.
+- **El pueblo tiene nombre y censo.** La semilla elige el topónimo (Peñaflor, Valdemoro, Sotoviejo…) y
+  el tamaño decide el título: Rincón, Aldea, Villa, Pueblo o Ciudad. Debajo, el censo en vivo: casas,
+  calles, árboles y el techo más alto. Es la primera cosa que se lee al entrar y cambia con cada bloque.
+- **La fiesta.** Un botón y el pueblo entero se pone de fiesta: cuerdas de banderines de casa a casa
+  cruzando la calle, un cruce de guirnaldas sobre cada plaza, farolillos de papel que se encienden de
+  noche (van como luces, así que el atardecer los hace brillar), confeti dorado cayendo sobre la isla y
+  la gente bailando en la plaza con los brazos arriba. Se apaga sola a los noventa segundos, o al
+  pulsar otra vez.
+
 ## Cómo está montado
 
 | Archivo | Qué hace |
 |---|---|
 | `src/grid.ts` | rejilla, isla procedural (semilla, con ríos y lagos), bloques con nivel, guardado en `localStorage` |
-| `src/rules.ts` | hechos de cada casilla (vecinos, agua, nivel, altura de alrededor) y 52 reglas ordenadas |
+| `src/rules.ts` | hechos de cada casilla (vecinos, agua, nivel, altura de alrededor y del suelo) y 53 reglas ordenadas |
 | `src/grow.ts` | el generador de "crecer un pueblo": plaza, calles, callejón, castillo, granja, puerto |
 | `src/geo.ts` | acumula primitivas en una geometría con color por vértice y recoge las luces |
-| `src/buildings.ts` | los 62 roles en 3D: palacios, castillos, invernaderos, viñedos, cuadras, muelles, árboles que crecen |
+| `src/buildings.ts` | los 63 roles en 3D: palacios, castillos, invernaderos, viñedos, cuadras, muelles, árboles que crecen |
 | `src/materials.ts` | tres tonos planos (sin rayado), agua con oleaje suave, humo y luces; `uDusk` mueve todo al atardecer |
 | `src/life.ts` | gente articulada, gatos, perros, palomas, globo aerostático, barcos con estela, gaviotas, humo, tiempo |
 | `src/season.ts` | las cuatro estaciones: tonos de hoja, césped y cosecha, y qué cae del cielo |
@@ -237,7 +267,7 @@ La isla no es un mantel: el terreno ondula, el agua entra tierra adentro y el bo
 | `src/intro.ts` | la tarjeta de bienvenida, que se muestra una sola vez |
 | `src/saves.ts` | tres pueblos guardados en `localStorage`, con su fecha y sus hallazgos |
 | `src/audio.ts` | viento, agua y gaviotas con WebAudio: sin archivos de sonido |
-| `src/main.ts` | paleta con candados, puntero, pincel, deshacer, alturas, panel, avisos |
+| `src/main.ts` | paleta con candados, pala de terreno, fiesta, nombre y censo, puntero, pincel, deshacer, alturas, panel, avisos |
 
 ### Notas que costaron encontrar
 

@@ -68,11 +68,21 @@ export const LINK_W = 8;
 export interface Town {
   seed: number;
   blocks: Map<string, Placed>;
+  /**
+   * Ground the player has lifted or dug by hand: cell → step (0..3). A cell with
+   * no entry keeps the natural hill of the island. It travels with the town, so
+   * a shared link brings the hills you made along with the houses.
+   */
+  ground?: Map<string, number>;
 }
+
+/** The highest terrace a hand can build: three steps over the water. */
+export const MAX_GROUND = 3;
 
 export interface SavedTown {
   seed: number;
   blocks: [number, number, BlockKind, number, number?][];
+  ground?: [number, number, number][];
   found: string[];
   clicks: number;
 }
@@ -280,7 +290,7 @@ export function loadSaved(): SavedTown | null {
   try {
     const raw = localStorage.getItem(TOWN_KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw) as { seed?: unknown; blocks?: unknown; found?: unknown; clicks?: unknown };
+    const data = JSON.parse(raw) as { seed?: unknown; blocks?: unknown; ground?: unknown; found?: unknown; clicks?: unknown };
     if (!data || typeof data.seed !== 'number' || !Array.isArray(data.blocks)) return null;
     const blocks: [number, number, BlockKind, number, number?][] = [];
     for (const entry of data.blocks as unknown[]) {
@@ -295,9 +305,18 @@ export function loadSaved(): SavedTown | null {
         typeof rot === 'number' ? rot : 0,
       ]);
     }
+    const ground: [number, number, number][] = [];
+    for (const entry of Array.isArray(data.ground) ? (data.ground as unknown[]) : []) {
+      if (!Array.isArray(entry) || entry.length < 3) continue;
+      const [x, z, level] = entry as [unknown, unknown, unknown];
+      if (typeof x !== 'number' || typeof z !== 'number' || typeof level !== 'number') continue;
+      if (x < 0 || z < 0 || x >= GRID || z >= GRID) continue;
+      ground.push([x, z, Math.min(Math.max(Math.round(level), 0), MAX_GROUND)]);
+    }
     return {
       seed: data.seed,
       blocks,
+      ground,
       found: Array.isArray(data.found) ? (data.found as unknown[]).filter((f): f is string => typeof f === 'string') : [],
       clicks: typeof data.clicks === 'number' && data.clicks >= 0 ? data.clicks : 0,
     };
@@ -309,6 +328,14 @@ export function loadSaved(): SavedTown | null {
 export function saveTown(town: Town, found: Set<string>, clicks = 0): void {
   const data: SavedTown = {
     seed: town.seed,
+    // The hills the player made are part of the town, or a saved link would come
+    // back flat under the houses.
+    ground: town.ground
+      ? [...town.ground].map(([k, level]) => {
+          const [x, z] = k.split(',').map(Number);
+          return [x, z, level] as [number, number, number];
+        })
+      : [],
     blocks: [...town.blocks].map(([k, placed]) => {
       const [x, z] = k.split(',').map(Number);
       return [x, z, placed.kind, placed.level, placed.rot ?? 0] as [number, number, BlockKind, number, number];
