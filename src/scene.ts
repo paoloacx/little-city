@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { GRID, HALF, Town, isShore, landAt, makeIsland, rng, worldX, worldZ } from './grid';
-import { GeoBuilder, Light, blob, cone, cube, panel, post, quad } from './geo';
+import { GeoBuilder, Light, blob, cone, cube, mixHex, panel, patch, post, quad } from './geo';
 import { Resolved, resolveTown } from './rules';
 import { buildRole } from './buildings';
 import { Life } from './life';
@@ -28,6 +28,33 @@ const pickHit = new THREE.Vector3();
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 /** One day and one night. */
 const CYCLE = 210;
+
+/**
+ * A slow field over the island: neighbouring tiles get nearly the same tone, so
+ * the grass drifts in big clouds instead of alternating like a chessboard.
+ */
+function driftField(seed: number, scale: number): (x: number, z: number) => number {
+  const hash = (i: number, j: number): number => {
+    let n = (i * 374761393 + j * 668265263 + seed * 2654435761) >>> 0;
+    n = Math.imul(n ^ (n >>> 13), 1274126177) >>> 0;
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+  };
+  return (x, z) => {
+    const fx = x / scale;
+    const fz = z / scale;
+    const ix = Math.floor(fx);
+    const iz = Math.floor(fz);
+    const tx = fx - ix;
+    const tz = fz - iz;
+    const sx = tx * tx * (3 - 2 * tx);
+    const sz = tz * tz * (3 - 2 * tz);
+    const a = hash(ix, iz);
+    const b = hash(ix + 1, iz);
+    const c = hash(ix, iz + 1);
+    const d = hash(ix + 1, iz + 1);
+    return (a * (1 - sx) + b * sx) * (1 - sz) + (c * (1 - sx) + d * sx) * sz;
+  };
+}
 
 interface Biome {
   name: string;
@@ -223,17 +250,34 @@ export class World {
     this.biome = BIOMES[Math.floor(rng((seed ^ 0x51ed270b) >>> 0)() * BIOMES.length) % BIOMES.length];
     const gb = new GeoBuilder();
     const random = rng(seed ^ 0x9e3779b9);
+    const drift = driftField(seed ^ 0x2545f491, 4.5);
+    const tones = this.biome.grass;
     for (let z = 0; z < GRID; z++) {
       for (let x = 0; x < GRID; x++) {
         if (!landAt(this.mask, x, z)) continue;
         const wx = worldX(x) * TILE;
         const wz = worldZ(z) * TILE;
         const shore = isShore(this.mask, x, z);
-        const pick = this.biome.grass[Math.floor(random() * this.biome.grass.length)];
-        const top = shore ? this.biome.sand : pick;
+        // A tone taken from the drift, so a tile is never its own colour.
+        const g = Math.min(drift(x, z) * tones.length, tones.length - 1.0001);
+        const near = Math.floor(g);
+        const grass = mixHex(tones[near], tones[near + 1] ?? tones[near], g - near);
+        const top = shore ? this.biome.sand : grass;
         gb.add(quad(), top, [wx, 0, wz], [0, 0, 0], [TILE, 1, TILE]);
-        if (!shore && random() < 0.7) {
-          gb.add(quad(), pick, [wx, 0.002 + random() * 0.001, wz], [0, random() * Math.PI, 0], [TILE * 0.5, 1, TILE * 0.5]);
+
+        // Two irregular patches, barely a tint apart: they break the tile grid
+        // without ever drawing a square.
+        const inland =
+          landAt(this.mask, x + 1, z) && landAt(this.mask, x - 1, z) && landAt(this.mask, x, z + 1) && landAt(this.mask, x, z - 1);
+        if (!shore && inland) {
+          const patches = random() < 0.35 ? 2 : 1;
+          for (let p = 0; p < patches; p++) {
+            const size = TILE * (p === 0 ? 1.05 + random() * 0.4 : 0.55 + random() * 0.3);
+            const px = wx + (random() - 0.5) * TILE * 0.3;
+            const pz = wz + (random() - 0.5) * TILE * 0.3;
+            const tone = mixHex(grass, random() < 0.5 ? 0xffffff : 0x2c2a1f, 0.03 + random() * 0.045);
+            gb.add(patch(Math.floor(random() * 6)), tone, [px, 0.0012 + p * 0.0007, pz], [0, random() * 6.283, 0], [size, 1, size]);
+          }
         }
 
         const sides: Array<[number, number]> = [];

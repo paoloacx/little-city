@@ -4,6 +4,14 @@ import * as THREE from 'three';
 
 export type Vec3 = [number, number, number];
 
+/** Blends two hex colours; grounds, paving and washes need tones in between. */
+export function mixHex(a: number, b: number, t: number): number {
+  const r = Math.round(((a >> 16) & 255) * (1 - t) + ((b >> 16) & 255) * t);
+  const g = Math.round(((a >> 8) & 255) * (1 - t) + ((b >> 8) & 255) * t);
+  const bl = Math.round((a & 255) * (1 - t) + (b & 255) * t);
+  return (r << 16) | (g << 8) | bl;
+}
+
 const matrix = new THREE.Matrix4();
 const normalMatrix = new THREE.Matrix3();
 const quaternion = new THREE.Quaternion();
@@ -175,3 +183,37 @@ const PANEL = new THREE.PlaneGeometry(1, 1);
 export function panel(): THREE.PlaneGeometry {
   return PANEL;
 }
+
+/**
+ * Flat irregular patches (five to seven sides, unit across), for grass that
+ * should read as a hand-drawn surface rather than a chessboard of tiles.
+ */
+const PATCHES = (() => {
+  const out: THREE.BufferGeometry[] = [];
+  for (let k = 0; k < 6; k++) {
+    const sides = 5 + (k % 3);
+    const ring: Array<[number, number]> = [];
+    for (let i = 0; i < sides; i++) {
+      const angle = (i / sides) * Math.PI * 2 + ((k * 0.37 + i * 0.11) % 0.3);
+      const r = 0.34 + ((k * 7 + i * 13) % 10) / 10 * 0.16;
+      // z is negated so the fan winds the way that faces up.
+      ring.push([Math.cos(angle) * r, -Math.sin(angle) * r]);
+    }
+    const positions: number[] = [];
+    for (let i = 0; i < sides; i++) {
+      const a = ring[i];
+      const b = ring[(i + 1) % sides];
+      positions.push(0, 0, 0, a[0], 0, a[1], b[0], 0, b[1]);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute(
+      'normal',
+      new THREE.Float32BufferAttribute(positions.map((_, i) => (i % 3 === 1 ? 1 : 0)), 3),
+    );
+    out.push(geometry);
+  }
+  return out;
+})();
+
+export const patch = (i = 0): THREE.BufferGeometry => PATCHES[Math.abs(i) % PATCHES.length];

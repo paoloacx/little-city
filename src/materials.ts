@@ -96,17 +96,18 @@ export function inkMaterial({
 
       void main() {
         vec3 n = normalize(vNormalW);
-        float lambert = dot(n, normalize(uLight)) * 0.5 + 0.5;
+        float lambert = dot(n, normalize(uLight));
 
-        // Five flat washes, the way ink dries: enough steps to read volume, and
-        // none of them a stripe.
-        float tone = smoothstep(0.10, 0.92, lambert);
-        float band = floor(tone * 5.0) / 5.0;
-        vec3 col = vColor * mix(0.68 - uDusk * 0.15, 0.99, band);
-
-        // Shade cools towards blue ink, light warms towards paper.
-        col = mix(col, col * vec3(0.93, 0.95, 1.06), (1.0 - band) * 0.5);
-        col = mix(col, uPaper, max(0.0, band - 0.8) * 0.05);
+        // Three flat tones, the way the reference kit draws a diorama: the lit
+        // face warms towards cream, the shaded one cools towards violet ink, and
+        // the step between them is a narrow band, so a face turns softly instead
+        // of snapping. Darkening alone is what made the old shade muddy.
+        vec3 lit = mix(vColor, vec3(1.0, 0.945, 0.77), 0.14);
+        vec3 shade = mix(vColor * 0.58, vec3(0.467, 0.424, 0.502), 0.20 - uDusk * 0.06);
+        float up = smoothstep(0.10, 0.46, lambert);
+        float down = smoothstep(-0.46, -0.10, lambert);
+        vec3 col = mix(shade, vColor, down);
+        col = mix(col, lit, up);
 
         // Contact shadow: the bottom of every shape sits into the ground.
         float ground = smoothstep(0.0, 0.5, vWorld.y);

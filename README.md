@@ -180,7 +180,7 @@ un piso, y una muralla junta convierte un rincón en fortaleza: todo se intercon
 | `src/grow.ts` | el generador de "crecer un pueblo": plaza, calles, callejón, castillo, granja, puerto |
 | `src/geo.ts` | acumula primitivas en una geometría con color por vértice y recoge las luces |
 | `src/buildings.ts` | los 62 roles en 3D: palacios, castillos, invernaderos, viñedos, cuadras, muelles, árboles que crecen |
-| `src/materials.ts` | tinta en cinco manchas (sin rayado), agua con oleaje suave, humo y luces; `uDusk` mueve todo al atardecer |
+| `src/materials.ts` | tres tonos planos (sin rayado), agua con oleaje suave, humo y luces; `uDusk` mueve todo al atardecer |
 | `src/life.ts` | gente articulada, gatos, perros, palomas, globo aerostático, barcos con estela, gaviotas, humo |
 | `src/share.ts` | el pueblo en un enlace (`#p=semilla.xzkN…`), con altura y giro de cada bloque; lo valida al cargar |
 | `src/scene.ts` | cámara, isla con su bioma y sus hierbas, agua, sombras, reconstrucción, ciclo de luz y postal |
@@ -200,9 +200,18 @@ un piso, y una muralla junta convierte un rincón en fortaleza: todo se intercon
   desaparecían bajo la tinta, y la hierba o los matojos salían como garabatos negros. Por eso los
   matojos son montoncitos anchos y no briznas: lo que es más fino que la pluma se dibuja solo con
   tinta. El empedrado se construye con losas pequeñas, no con líneas.
-- El sombreado son cinco manchas planas, sombra de contacto en la base y un filo de tinta muy suave
-  al ras del perfil. Antes había un rayado en pantalla; se quitó porque parecía tela y se comía el
-  dibujo.
+- El sombreado son **tres tonos planos**: la cara iluminada se mezcla un 14 % hacia crema, la de
+  sombra un 58 % hacia abajo y un 20 % hacia violeta, y el paso entre ambos es una banda estrecha,
+  así que la cara gira sin escalones. Antes eran cinco bandas de gris que oscurecían el color: por
+  eso las sombras salían turbias. Hay además sombra de contacto en la base y un filo de tinta muy
+  suave al ras del perfil.
+- El suelo no es un damero: el tono del césped sale de un campo de ruido lento (cuatro o cinco
+  casillas de largo), así que las casillas vecinas casi comparten color, y encima van una o dos
+  manchas poligonales irregulares a un 3-7 % de tono. Antes cada casilla elegía su verde y se veía la
+  cuadrícula.
+- El empedrado de plazas y caminos son polígonos irregulares (`patch`, seis formas) sobre un lecho
+  de argamasa oscura, con las juntas al azar: una losa nunca es un cuadrado. La calle es tierra
+  apisonada con manchas de desgaste, no una cruz de losas claras.
 - Las ventanas llevan marco de piedra que sobresale del muro, cruceta y alféizar; las puertas, jambas,
   dintel, dos cuarteles y picaporte. Las casas eligen entre siete cales de muro y muchas llevan
   entramado de madera en las esquinas, para que una calle no parezca la misma casa repetida.
@@ -258,6 +267,34 @@ Lo medido en un pueblo de unos cien bloques, con la ventana quieta:
 
 Lo que queda en ~300 llamadas es la vida: cada caminante son seis piezas y cada quieto cuatro. Es el
 siguiente sitio donde apretar, fusionando brazos y piernas de los que no andan.
+
+## Lo que tomamos de Pocket City
+
+En `~/Downloads/pocket-city` está la skill **Pocket City** de April Zhu
+(<https://april-zhu.com/pocketcity>): dibuja un trozo real de ciudad en isométrico, en una sola página
+HTML. Es otro motor (Canvas 2D con polígonos proyectados) y otra idea (importar un lugar de
+OpenStreetMap), pero la misma mirada de diorama dibujado a mano. Su licencia es PolyForm
+Noncommercial 1.0.0: vale para proyectos no comerciales citándola.
+
+Lo que ya está traído a three.js:
+
+| Del kit | Aquí |
+|---|---|
+| Tres tonos planos por cara; la luz hacia crema, la sombra hacia violeta | `inkMaterial`, el sombreado de todo el diorama |
+| Suelo de manchas, nunca una cuadrícula | el césped por campo de ruido y las losas irregulares (`patch`) |
+| Pavimento de piedras irregulares sobre argamasa | `plaza`, `street` y `quay` |
+| Figuras de tres tonos, con ropa y pelo de verdad | `life.ts` |
+
+Lo que queda por traer, por lo que más se vería:
+
+1. **Estaciones**: hojas, nieve en los tejados, ropa de abrigo, pétalos y hojas cayendo. El kit lo
+   resuelve con una tabla de paletas por especie y un puñado de partículas.
+2. **Catálogo de fachadas**: contraventanas, toldos, rótulos, cornisas, balcones, arcos. La anatomía
+   de cada tipo de edificio está en `references/research.md`.
+3. **Árboles por especie**: siete formas con sus proporciones (dónde bifurca el tronco, qué ancho
+   tiene la copa, si es de vaso), en vez de bolas de verde.
+4. **Lugares reales**: `fetch_osm.py`, `plot.py` y `prep.py` convierten una calle de OpenStreetMap en
+   un `scene.json`; de ahí saldrían semillas con la trama de una ciudad de verdad.
 
 ## Publicarlo en abierto
 

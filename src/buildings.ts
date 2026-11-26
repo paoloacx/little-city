@@ -4,7 +4,7 @@
  * Levels add floors, and windows register lights for the evening.
  */
 
-import { GeoBuilder, blob, cone, cube, dome, panel, plate, post, pyramid, quad, ring } from './geo';
+import { GeoBuilder, blob, cone, cube, dome, mixHex, panel, patch, plate, post, pyramid, quad, ring } from './geo';
 import { LINK_E, LINK_N, LINK_S, LINK_W } from './grid';
 import { Role } from './rules';
 
@@ -842,9 +842,19 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
   },
 
   street: (gb, rnd) => {
-    gb.add(quad(), C.path, [0, 0.012, 0], [0, 0, 0], [0.98, 1, 0.98]);
-    gb.add(cube(), C.stoneLight, [0, 0.02, 0], [0, 0, 0], [0.34, 0.02, 0.98]);
-    gb.add(cube(), C.stoneLight, [0, 0.021, 0], [0, 0, 0], [0.98, 0.02, 0.34]);
+    // A lane of packed earth, worn in patches rather than ruled in a cross.
+    gb.add(quad(), C.path, [0, 0.012, 0], [0, 0, 0], [0.99, 1, 0.99]);
+    const light = mixHex(C.path, 0xf3e7cd, 0.3);
+    const dark = mixHex(C.path, C.soil, 0.22);
+    for (let i = 0; i < 3; i++) {
+      const px = (rnd() - 0.5) * 0.6;
+      const pz = (rnd() - 0.5) * 0.6;
+      const size = 0.42 + rnd() * 0.3;
+      gb.add(patch(Math.floor(rnd() * 6)), rnd() < 0.6 ? light : dark, [px, 0.014, pz], [0, rnd() * 6.283, 0], [size, 1, size]);
+    }
+    for (let i = 0; i < 2; i++) {
+      gb.add(blob(), mixHex(C.stone, C.path, 0.6), [(rnd() - 0.5) * 0.8, 0.02, (rnd() - 0.5) * 0.8], [0, rnd() * 3, 0], [0.07, 0.03, 0.07]);
+    }
     if (rnd() < 0.75) lamp(gb, 0.4, 0.4);
     if (rnd() < 0.3) lamp(gb, -0.4, -0.4);
     if (rnd() < 0.3) bench(gb, -0.36, 0.42, 0.2);
@@ -902,17 +912,28 @@ const builders: Record<Role, (gb: GeoBuilder, rnd: () => number, level: number, 
   },
 
   plaza: (gb, rnd) => {
-    gb.add(cube(), C.stoneDark, [0, 0.016, 0], [0, 0, 0], [0.97, 0.032, 0.97]);
+    // Paving is a bed of mortar with stones laid on it: irregular polygons that
+    // overlap a little, so the joints wander instead of ruling a grid.
+    gb.add(cube(), mixHex(C.stoneDark, C.ink, 0.22), [0, 0.014, 0], [0, 0, 0], [0.99, 0.028, 0.99]);
+    const tones = [C.stone, C.stoneLight, mixHex(C.stone, C.stoneLight, 0.55), mixHex(C.stone, C.stoneDark, 0.3)];
     const n = 4;
-    const step = 0.97 / n;
+    const step = 0.98 / n;
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
-        const px = -0.485 + step * (i + 0.5);
-        const pz = -0.485 + step * (j + 0.5);
-        const tone = rnd() < 0.4 ? C.stone : C.stoneLight;
-        gb.add(cube(), tone, [px, 0.04, pz], [0, 0, 0], [step * 0.9, 0.02, step * 0.9]);
+        const px = -0.49 + step * (i + 0.5) + (rnd() - 0.5) * step * 0.1;
+        const pz = -0.49 + step * (j + 0.5) + (rnd() - 0.5) * step * 0.1;
+        const turn = rnd() * 6.283;
+        const size = step * (1.34 + rnd() * 0.16);
+        const tone = tones[Math.floor(rnd() * tones.length)];
+        gb.add(patch(Math.floor(rnd() * 6)), tone, [px, 0.03 + rnd() * 0.0016, pz], [0, turn, 0], [size, 1, size]);
       }
     }
+    // Worn kerb stones and a drain, so the paving meets the grass.
+    for (let i = 0; i < 3; i++) {
+      const along = -0.34 + i * 0.34;
+      gb.add(cube(), mixHex(C.stone, C.stoneDark, 0.5), [along, 0.02, 0.47], [0, (rnd() - 0.5) * 0.05, 0], [0.3, 0.03, 0.06]);
+    }
+    gb.add(cube(), C.iron, [0.36, 0.03, -0.36], [0, 0, 0], [0.07, 0.012, 0.07]);
   },
 
   square: (gb) => {
