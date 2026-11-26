@@ -604,7 +604,9 @@ export class World {
           let shadow: THREE.BufferGeometry | null = null;
           if (!onWater) {
             shadow = this.shadowGeometry.clone();
-            offset.set(0.1, 0.01, -0.08).applyAxisAngle(Y_AXIS, align);
+            // The shadow lies on the ground the block stands on, so a house on a
+            // terrace does not drop its shadow down the slope.
+            offset.set(0.1, baseY + 0.012, -0.08).applyAxisAngle(Y_AXIS, align);
             shadowMatrix.makeRotationY(align + 0.3);
             shadowMatrix.setPosition(wx + offset.x, offset.y, wz + offset.z);
             shadow.applyMatrix4(shadowMatrix);
